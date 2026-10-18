@@ -1,0 +1,8 @@
+{
+    "name": "Pradip Patil Bill Generator",
+    "short_name": "DMart Bills",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#f8fafc",
+    "theme_color": "#eab308"
+}

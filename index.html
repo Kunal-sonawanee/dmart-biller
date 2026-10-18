@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Pradip Patil - D-Mart Bill Generator & Analytics</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf for Printable Invoices -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- SheetJS for Excel Backup (.xlsx) generation & formulas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        /* Exact Invoice Table Styling matching original Excel sheet */
+        .invoice-page {
+            width: 210mm;
+            min-height: 275mm;
+            padding: 12mm;
+            background: #ffffff;
+            color: #000000;
+            font-family: 'Times New Roman', Times, serif;
+            box-sizing: border-box;
+            margin: 0 auto;
+        }
+
+        .inv-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #000;
+            font-size: 13.5px;
+            line-height: 1.25;
+        }
+
+        .inv-table td,
+        .inv-table th {
+            border: 1px solid #000;
+            padding: 4px 6px;
+            vertical-align: middle;
+        }
+
+        .bg-gold {
+            background-color: #e6b83a !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-amber-light {
+            background-color: #f4d068 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-header-pink {
+            background-color: #e8d0d0 !important;
+            color: #901a1e;
+            font-family: Arial, sans-serif;
+            font-weight: 700;
+            font-size: 12.5px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bg-row-blue {
+            background-color: #dce4f2 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .hand-val {
+            font-family: Arial, sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            color: #111827;
+        }
+
+        /* Custom scrollbar for analytics modal */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 9999px;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #print-area,
+            #print-area * {
+                visibility: visible;
+            }
+
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+
+            .invoice-page {
+                padding: 5mm;
+                width: 100%;
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 text-slate-900 min-h-screen pb-28 font-sans antialiased">
+
+    <!-- Top Compact App Header -->
+    <header class="bg-slate-900 text-white px-4 py-3 shadow-md sticky top-0 z-30 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-black text-sm">
+                PP
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-base font-bold tracking-tight text-amber-400 leading-tight">PRADIP PATIL</h1>
+                <p class="text-[11px] text-slate-300">D-Mart Invoice Generator • Code: 417744</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <!-- Analytics & Backup Hub Button with Counter Badge -->
+            <button onclick="toggleAnalyticsModal()" id="headerAnalyticsBtn"
+                class="text-xs bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-bold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition active:scale-95">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                </svg>
+                <span class="hidden xs:inline">Analytics</span>
+                <span id="badgeInvoiceCount" class="bg-slate-950 text-amber-400 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold">2</span>
+            </button>
+            <button onclick="togglePreviewModal()"
+                class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg font-medium transition">
+                Preview
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Compact Single-Screen Form -->
+    <main class="max-w-md mx-auto p-3 space-y-3">
+
+        <!-- Live Excel Backup & Analytics Status Bar -->
+        <div class="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-800 rounded-xl p-3 text-white shadow-sm border border-slate-700/80 flex items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div class="truncate">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-bold text-slate-100">Excel Backup Active</span>
+                        <span class="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Auto-Log</span>
+                    </div>
+                    <div class="text-[11px] text-slate-300 truncate mt-0.5">
+                        Total Billed: <strong id="quickBarTotal" class="text-amber-400 font-extrabold">₹17,292</strong> • <span id="quickBarCount">2 Invoices</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="downloadExcelBackup()" title="Download DMart_Billing_Backup.xlsx"
+                    class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 shadow-sm transition active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>.xlsx</span>
+                </button>
+                <button onclick="toggleAnalyticsModal()" title="View full analytics dashboard"
+                    class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1.5 rounded-lg font-medium transition">
+                    Hub ↗
+                </button>
+            </div>
+        </div>
+
+        <!-- Card 1: Invoice Meta (No, Date, Store) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3.5 space-y-3">
+            <div class="grid grid-cols-5 gap-2.5">
+                <!-- Auto Invoice Number -->
+                <div class="col-span-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-bold text-slate-600 uppercase">Invoice #</label>
+                        <span
+                            class="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">Auto</span>
+                    </div>
+                    <input type="number" id="invNo" oninput="syncInvoice()"
+                        class="w-full px-3 py-2 text-base font-bold bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none" />
+                </div>
+
+                <!-- Native Date Picker (Defaults to Today) -->
+                <div class="col-span-3">
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Invoice Date</label>
+                    <input type="date" id="invDate" onchange="syncInvoice()"
+                        class="w-full px-3 py-2 text-sm font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none" />
+                </div>
+            </div>
+
+            <!-- D-Mart Store Selection -->
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Select D-Mart Store</label>
+                <select id="storeSelect" onchange="handleStoreChange()"
+                    class="w-full px-3 py-2.5 text-sm font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none">
+                    <option value="Avenue Super marts Ltd Bhayali - vadodara">Bhayali - Vadodara</option>
+                    <option value="Avenue Super marts Ltd Makarpura - vadodara">Makarpura - Vadodara</option>
+                    <option value="Avenue Super marts Ltd Manjalpur - vadodara">Manjalpur - Vadodara</option>
+                    <option value="Avenue Super marts Ltd Waghodia - vadodara">Waghodia Road - Vadodara</option>
+                    <option value="CUSTOM">Other / Custom D-Mart Branch...</option>
+                </select>
+                <input type="text" id="customStore" oninput="syncInvoice()" placeholder="Enter full store name..."
+                    class="hidden mt-2 w-full px-3 py-2 text-sm bg-white border border-amber-400 rounded-lg outline-none" />
+            </div>
+        </div>
+
+        <!-- Card 2: Billing Period (Current Month Presets + Editable Field) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+                <label class="text-xs font-bold text-slate-600 uppercase">Billing Period</label>
+                <span id="currentMonthBadge"
+                    class="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded"></span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" id="btnFirstHalf" onclick="setPeriodPreset('FIRST')"
+                    class="py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 active:scale-[0.99] transition">
+                    1st to 15th
+                </button>
+                <button type="button" id="btnSecondHalf" onclick="setPeriodPreset('SECOND')"
+                    class="py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 active:scale-[0.99] transition">
+                    16th to End of Month
+                </button>
+            </div>
+
+            <input type="text" id="billingPeriod" oninput="syncInvoice()" placeholder="e.g. 1/10/2026 to 15/10/2026"
+                class="w-full px-3 py-2 text-sm font-medium bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none" />
+        </div>
+
+        <!-- Card 3: Unloading Quantities (Blank by Default) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3.5 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+                <!-- Ankhi DC Unloading -->
+                <div class="bg-amber-50/60 border border-amber-200/80 rounded-xl p-2.5">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold text-slate-800">Ankhi DC (Ton)</span>
+                        <span class="text-[11px] font-semibold text-slate-500">₹95/Ton</span>
+                    </div>
+                    <input type="number" id="ankhiQty" step="0.001" inputmode="decimal" placeholder="0.000"
+                        oninput="syncInvoice()"
+                        class="w-full px-2.5 py-2 text-lg font-bold bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" />
+                    <div class="mt-1.5 flex justify-between items-center text-xs">
+                        <span class="text-slate-500">Amount:</span>
+                        <span id="ankhiAmtDisplay" class="font-bold text-slate-800">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- Por DC Unloading -->
+                <div class="bg-blue-50/60 border border-blue-200/80 rounded-xl p-2.5">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold text-slate-800">Por DC (Box)</span>
+                        <span class="text-[11px] font-semibold text-slate-500">₹1.75/Box</span>
+                    </div>
+                    <input type="number" id="porQty" step="1" inputmode="numeric" placeholder="0"
+                        oninput="syncInvoice()"
+                        class="w-full px-2.5 py-2 text-lg font-bold bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <div class="mt-1.5 flex justify-between items-center text-xs">
+                        <span class="text-slate-500">Amount:</span>
+                        <span id="porAmtDisplay" class="font-bold text-slate-800">₹0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Words Live Summary -->
+            <div class="bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                <div class="text-[10px] font-bold uppercase text-slate-400">Rupees in Words</div>
+                <div id="wordsLiveDisplay" class="text-xs font-semibold text-slate-700 truncate">Zero only</div>
+            </div>
+
+            <!-- Auto Backup Preferences -->
+            <div class="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs border-t border-slate-100">
+                <label class="flex items-center gap-2 cursor-pointer select-none text-slate-600 font-medium">
+                    <input type="checkbox" id="autoExcelDownloadCheck" onchange="toggleAutoExcelSetting()"
+                        class="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300">
+                    <span>Auto-export Excel on Bill Download</span>
+                </label>
+                <button type="button" onclick="recordCurrentInvoiceToBackup(true)"
+                    class="text-amber-700 hover:text-amber-800 font-bold hover:underline flex items-center gap-1">
+                    <span>💾 Save to Backup Only</span>
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Sticky Bottom Action Bar -->
+    <div class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2.5 shadow-lg z-20">
+        <div class="max-w-md mx-auto flex items-center justify-between gap-2.5">
+            <div>
+                <div class="text-[10px] font-bold uppercase text-slate-400">Grand Total (Rounded)</div>
+                <div id="grandTotalLive" class="text-xl font-extrabold text-slate-900">₹0</div>
+            </div>
+            
+            <div class="flex items-center gap-1.5 flex-1 justify-end">
+                <button onclick="downloadExcelBackup()" title="Download Excel Backup Spreadsheet"
+                    class="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold p-3 rounded-xl shadow-sm transition active:scale-95" aria-label="Export Excel">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </button>
+                <button onclick="downloadPDF()" id="downloadBtn"
+                    class="flex-1 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-bold text-sm py-3 px-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor" stroke-width="2.2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download PDF & Log</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Toast Notification -->
+    <div id="toastNotification" class="fixed top-4 right-4 max-w-sm w-full bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700 p-3.5 z-50 transform translate-y-[-150%] opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="flex items-start gap-3">
+            <div id="toastIcon" class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h4 id="toastTitle" class="text-xs font-bold text-slate-100">Backup Updated</h4>
+                <p id="toastMessage" class="text-[11px] text-slate-300 mt-0.5 leading-snug">Invoice logged and analytics recalculated.</p>
+                <div id="toastActions" class="mt-2 flex items-center gap-2">
+                    <button onclick="toggleAnalyticsModal()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2 py-0.5 rounded font-bold transition">View Hub</button>
+                    <button onclick="downloadExcelBackup()" class="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded font-bold transition">Download Excel</button>
+                </div>
+            </div>
+            <button onclick="hideToast()" class="text-slate-400 hover:text-slate-200 text-sm">✕</button>
+        </div>
+    </div>
+
+    <!-- Analytics & Excel Backup Hub Modal -->
+    <div id="analyticsModal" class="fixed inset-0 bg-slate-900/80 z-40 hidden overflow-y-auto p-2 sm:p-4 backdrop-blur-sm">
+        <div class="max-w-4xl mx-auto my-3 sm:my-6 bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-amber-500 text-slate-950">Analytics & Backup Hub</span>
+                        <span class="text-xs text-slate-400 font-mono">DMart_Billing_Backup.xlsx</span>
+                    </div>
+                    <h2 class="text-lg font-extrabold text-white mt-1">D-Mart Contractor Billing Analytics</h2>
+                    <p class="text-xs text-slate-300">Contractor: Pradip Patil (417744) • Live calculations across all logged invoices</p>
+                </div>
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <button onclick="downloadExcelBackup()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        <span>Download Excel Sheet (.xlsx)</span>
+                    </button>
+                    <button onclick="toggleAnalyticsModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl font-bold text-xs transition">
+                        ✕ Close
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="bg-slate-100 border-b border-slate-200 px-4 sm:px-6 flex gap-2 sm:gap-4 overflow-x-auto text-xs font-bold text-slate-600">
+                <button onclick="switchTab('overview')" id="tabBtn-overview" class="py-3 px-1 border-b-2 border-amber-500 text-amber-700 flex items-center gap-1.5">
+                    <span>📊 Analytics Dashboard</span>
+                </button>
+                <button onclick="switchTab('history')" id="tabBtn-history" class="py-3 px-1 border-b-2 border-transparent hover:text-slate-900 flex items-center gap-1.5">
+                    <span>📋 Bills History & Records</span>
+                    <span id="tabBadgeHistory" class="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full text-[10px]">2</span>
+                </button>
+                <button onclick="switchTab('tools')" id="tabBtn-tools" class="py-3 px-1 border-b-2 border-transparent hover:text-slate-900 flex items-center gap-1.5">
+                    <span>⚙️ Excel & Data Tools</span>
+                </button>
+            </div>
+
+            <!-- Modal Body Content -->
+            <div class="p-4 sm:p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scroll">
+
+                <!-- TAB 1: OVERVIEW & ANALYTICS -->
+                <div id="tabContent-overview" class="space-y-6">
+                    <!-- 4 KPI Cards -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                        <!-- Revenue -->
+                        <div class="bg-gradient-to-br from-amber-50 to-amber-100/70 border border-amber-200 rounded-xl p-3.5">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-amber-800">Total Billed Revenue</div>
+                            <div id="kpiRevenue" class="text-xl sm:text-2xl font-black text-amber-950 mt-1">₹0</div>
+                            <div class="text-[11px] text-amber-700 font-medium mt-1">From all backup bills</div>
+                        </div>
+
+                        <!-- Invoices -->
+                        <div class="bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-xl p-3.5">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Invoices Generated</div>
+                            <div id="kpiInvoiceCount" class="text-xl sm:text-2xl font-black text-slate-900 mt-1">0</div>
+                            <div id="kpiAvgAmount" class="text-[11px] text-slate-600 font-medium mt-1">Avg: ₹0 / bill</div>
+                        </div>
+
+                        <!-- Ankhi DC -->
+                        <div class="bg-gradient-to-br from-blue-50 to-blue-100/70 border border-blue-200 rounded-xl p-3.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-800">Ankhi DC (Ton)</span>
+                                <span class="text-[10px] font-bold text-blue-600">₹95/Ton</span>
+                            </div>
+                            <div id="kpiAnkhiQty" class="text-xl sm:text-2xl font-black text-blue-950 mt-1">0.000 T</div>
+                            <div id="kpiAnkhiRevenue" class="text-[11px] text-blue-700 font-medium mt-1">Earnings: ₹0.00</div>
+                        </div>
+
+                        <!-- Por DC -->
+                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100/70 border border-emerald-200 rounded-xl p-3.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Por DC (Box)</span>
+                                <span class="text-[10px] font-bold text-emerald-600">₹1.75/Box</span>
+                            </div>
+                            <div id="kpiPorQty" class="text-xl sm:text-2xl font-black text-emerald-950 mt-1">0 Boxes</div>
+                            <div id="kpiPorRevenue" class="text-[11px] text-emerald-700 font-medium mt-1">Earnings: ₹0.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Store-Wise Breakdown -->
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">Store-Wise Performance Breakdown</h3>
+                                <p class="text-xs text-slate-500">Distribution of invoices, tons, boxes, and billing revenue across branches</p>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded">Linked to Excel Formulas</span>
+                        </div>
+
+                        <div id="storeBreakdownContainer" class="space-y-2.5 pt-1">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Monthly Trend Breakdown -->
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-900">Monthly Billing Trends</h3>
+                            <span class="text-xs text-slate-500">Month-on-Month Summary</span>
+                        </div>
+                        <div id="monthlyTrendsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: BILLS HISTORY & RECORDS -->
+                <div id="tabContent-history" class="space-y-4 hidden">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                        <div class="relative w-full sm:w-72">
+                            <input type="text" id="historySearchInput" oninput="filterHistoryTable()" placeholder="Search by inv #, store, date..."
+                                class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" />
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-2.5 top-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <button onclick="downloadExcelBackup()" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                                <span>Export Excel (.xlsx)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-800 text-white font-bold text-[11px] uppercase tracking-wider">
+                                    <tr>
+                                        <th class="py-2.5 px-3">Inv #</th>
+                                        <th class="py-2.5 px-3">Date</th>
+                                        <th class="py-2.5 px-3">D-Mart Store</th>
+                                        <th class="py-2.5 px-3 text-right">Ankhi (Ton)</th>
+                                        <th class="py-2.5 px-3 text-right">Por (Box)</th>
+                                        <th class="py-2.5 px-3 text-right">Total (₹)</th>
+                                        <th class="py-2.5 px-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody" class="divide-y divide-slate-200 font-medium">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: EXCEL & DATA TOOLS -->
+                <div id="tabContent-tools" class="space-y-4 hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Card: Excel Spreadsheet Sync -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">📊</span>
+                                <h4 class="text-sm font-bold text-slate-900">Excel Backup File (.xlsx)</h4>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Generates a dual-sheet Microsoft Excel file (<code class="bg-slate-200 px-1 py-0.5 rounded text-slate-800">DMart_Billing_Backup.xlsx</code>) containing all transactional rows with formulas and the Analytics Dashboard with executive KPIs.
+                            </p>
+                            <button onclick="downloadExcelBackup()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-2 shadow-sm transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                <span>Download Updated Excel File</span>
+                            </button>
+                        </div>
+
+                        <!-- Card: JSON Data Backup & Sync -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">🔄</span>
+                                <h4 class="text-sm font-bold text-slate-900">JSON Data Backup & Restore</h4>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Export raw JSON backup records to transfer across devices or sync with Python <code class="bg-slate-200 px-1 py-0.5 rounded text-slate-800">backup_manager.py</code>.
+                            </p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="exportJsonBackup()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition">
+                                    Export JSON
+                                </button>
+                                <label class="bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-bold py-2 px-3 rounded-lg text-xs text-center cursor-pointer transition">
+                                    Import JSON
+                                    <input type="file" id="importJsonFileInput" accept=".json" onchange="importJsonBackup(event)" class="hidden" />
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card: Python Automation Info -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 col-span-1 md:col-span-2">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Local Python Manager Ready</h4>
+                                <span class="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-mono">backup_manager.py</span>
+                            </div>
+                            <p class="text-xs text-slate-600">
+                                You can also manage the backup directly in your terminal via Python:
+                            </p>
+                            <pre class="bg-slate-900 text-amber-300 p-2.5 rounded-lg text-[11px] font-mono overflow-x-auto">python backup_manager.py summary
+python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 3200</pre>
+                        </div>
+
+                        <!-- Card: Reset / Baseline -->
+                        <div class="col-span-1 md:col-span-2 flex items-center justify-between pt-2 border-t border-slate-200">
+                            <button onclick="restoreDefaultBaseline()" class="text-xs text-slate-600 hover:text-slate-900 font-medium underline">
+                                Reset to Default Baseline (Invoices #47 &amp; #48)
+                            </button>
+                            <button onclick="clearAllRecords()" class="text-xs text-red-600 hover:text-red-700 font-bold">
+                                🗑️ Clear All Billing Records
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Full-Screen Preview Modal (Optional on Mobile, Hidden by default) -->
+    <div id="previewModal" class="fixed inset-0 bg-slate-900/80 z-30 hidden overflow-y-auto p-3">
+        <div class="max-w-3xl mx-auto my-4">
+            <div class="flex justify-between items-center bg-slate-800 text-white px-4 py-2.5 rounded-t-xl">
+                <span class="text-sm font-bold">Exact Print Preview</span>
+                <button onclick="togglePreviewModal()" class="text-xs bg-slate-700 px-3 py-1 rounded-lg">Close ✕</button>
+            </div>
+            <div class="bg-slate-200 p-2 overflow-x-auto rounded-b-xl">
+                <div id="modalPreviewContainer" class="origin-top-left"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Off-screen Print/PDF Render Container -->
+    <div class="fixed left-[-9999px] top-0">
+        <div id="print-area">
+            <div id="invoice-sheet" class="invoice-page">
+                <table class="inv-table">
+                    <colgroup>
+                        <col style="width: 13%;" />
+                        <col style="width: 39%;" />
+                        <col style="width: 13%;" />
+                        <col style="width: 12%;" />
+                        <col style="width: 10%;" />
+                        <col style="width: 13%;" />
+                    </colgroup>
+                    <tbody>
+                        <!-- Row 1: TAX INVOICE -->
+                        <tr class="bg-gold">
+                            <td></td>
+                            <td colspan="5" class="font-bold text-left tracking-wide"
+                                style="font-family: Arial, sans-serif; font-size: 13px;">TAX INVOICE</td>
+                        </tr>
+                        <!-- Row 2: PRADIP PATIL -->
+                        <tr class="bg-amber-light">
+                            <td></td>
+                            <td colspan="5" class="font-bold text-left"
+                                style="font-family: Arial, sans-serif; font-size: 13px; color: #b45309;">PRADIP PATIL
+                            </td>
+                        </tr>
+                        <!-- Row 3: Address -->
+                        <tr>
+                            <td rowspan="6" class=" text-left align-middle font-bold"
+                                style="font-family: Arial, sans-serif;">417744</td>
+                            <td colspan="5" class="font-bold text-center"
+                                style="font-family: Arial, sans-serif; font-size: 12.5px;">
+                                55-1 SHIVSHAKTI NAGAR, BEHIND MAKARPURA DEPOT
+                            </td>
+                        </tr>
+                        <!-- Row 4: City -->
+                        <tr>
+                            <td colspan="3" class="font-bold text-center"
+                                style="font-family: Arial, sans-serif; font-size: 12.5px;">VADODARA, 390010</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <!-- Row 5: Labor Supply -->
+                        <tr>
+                            <td colspan="3" class="font-bold text-left"
+                                style="font-family: Arial, sans-serif; font-size: 12.5px;">ALL kinds of labor supply
+                                loading &amp; unloading</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <!-- Row 6: Contractor & Invoice Date -->
+                        <tr>
+                            <td colspan="2" class="font-bold text-center"
+                                style="font-family: Arial, sans-serif; font-size: 12.5px;">Contractor</td>
+                            <td></td>
+                            <td class="font-bold text-left" style="font-family: Arial, sans-serif; font-size: 12px;">
+                                Invoice Date:</td>
+                            <td id="pdfInvDate" class="hand-val text-center"></td>
+                        </tr>
+                        <!-- Row 7: Invoice Number -->
+                        <tr>
+                            <td colspan="2"></td>
+                            <td></td>
+                            <td colspan="2" class="font-bold text-left"
+                                style="font-family: Arial, sans-serif; font-size: 12.5px;">
+                                Invoice Number: <span id="pdfInvNo" class="hand-val ml-1"></span>
+                            </td>
+                        </tr>
+                        <!-- Row 8: Client Name (Fixed wrapping so Vadodara is never cut off) -->
+                        <tr>
+                            <td colspan="5" class="py-2" style="font-family: Arial, sans-serif; font-size: 12.5px;">
+                                <div class="font-bold">Mr/Mrs: &nbsp;&nbsp;&nbsp;&nbsp;<span id="pdfStoreName"
+                                        class="underline font-bold"></span></div>
+                            </td>
+                        </tr>
+
+                        <!-- Table Column Headers -->
+                        <tr class="bg-header-pink text-left">
+                            <th>Sr.No</th>
+                            <th>Description</th>
+                            <th>HSN CODE</th>
+                            <th>QTY</th>
+                            <th>RATE</th>
+                            <th>Total Amount</th>
+                        </tr>
+
+                        <!-- Item Row 1: Billing Date Period -->
+                        <tr class="bg-row-blue" style="height: 38px;">
+                            <td class="font-bold">1</td>
+                            <td id="pdfPeriod" class="hand-val"></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Item Row 2: Ankhi Dc unloading -->
+                        <tr class="bg-row-blue" style="height: 40px;">
+                            <td class="font-bold">2</td>
+                            <td class="align-top font-medium">Ankhi Dc unloading</td>
+                            <td></td>
+                            <td id="pdfAnkhiQty" class="hand-val text-center"></td>
+                            <td class="align-top font-medium">95</td>
+                            <td id="pdfAnkhiTotal" class="hand-val text-right"></td>
+                        </tr>
+
+                        <!-- Spacer Blue Row -->
+                        <tr class="bg-row-blue" style="height: 22px;">
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Item Row 3: Por Dc unloading -->
+                        <tr class="bg-row-blue" style="height: 40px;">
+                            <td class="font-bold">3</td>
+                            <td class="align-top font-medium">Por Dc unloading</td>
+                            <td></td>
+                            <td id="pdfPorQty" class="hand-val text-center"></td>
+                            <td class="align-top font-medium">1.75</td>
+                            <td id="pdfPorTotal" class="hand-val text-right"></td>
+                        </tr>
+
+                        <!-- 8 Blank Filler Blue Rows matching original sheet height -->
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td><td></td><td></td>
+                        </tr>
+
+                        <!-- Totals & GST Footer Rows -->
+                        <tr class="bg-row-blue" style="height: 26px;">
+                            <td></td><td></td><td></td><td></td>
+                            <td class="font-bold text-center"
+                                style="font-family: Arial, sans-serif; font-size: 12.5px;">Total</td>
+                            <td id="pdfGrandTotal" class="hand-val text-right font-bold"></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td>
+                            <td class="font-bold text-center" style="font-family: Arial, sans-serif; font-size: 12px;">CGST%</td>
+                            <td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td>
+                            <td class="font-bold text-center" style="font-family: Arial, sans-serif; font-size: 12px;">SGST%</td>
+                            <td></td>
+                        </tr>
+                        <tr class="bg-row-blue" style="height: 24px;">
+                            <td></td><td></td><td></td><td></td>
+                            <td class="font-bold text-center" style="font-family: Arial, sans-serif; font-size: 12px;">IGST%</td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Rupees in Words & Signature Box -->
+                        <tr style="height: 95px;">
+                            <td colspan="6" class="align-top p-2 relative">
+                                <div class="flex items-baseline gap-3">
+                                    <span class="font-bold whitespace-nowrap"
+                                        style="font-family: Arial, sans-serif; font-size: 12.5px;">Rupees in words</span>
+                                    <span id="pdfWords" class="hand-val underline decoration-1 underline-offset-4"></span>
+                                </div>
+                                <div class="text-right mt-8 pr-4">
+                                    <div class="font-bold text-xs tracking-wider"
+                                        style="color: #8b3a3a; font-family: Arial, sans-serif;">PRADIP D. PATIL</div>
+                                    <div class="font-bold text-xs mt-5"
+                                        style="color: #8b3a3a; font-family: Arial, sans-serif;">Proprietor</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        const ANKHI_RATE = 95;
+        const POR_RATE = 1.75;
+        const STORAGE_KEY_INV = 'pradip_patil_last_inv_no';
+        const STORAGE_KEY_BILLS = 'pradip_patil_dmart_bills_v1';
+        const STORAGE_KEY_AUTO_EXCEL = 'pradip_patil_auto_excel_export';
+
+        // Initial Verified Baseline Records
+        const DEFAULT_BASELINE = [
+            {
+                invNo: 47,
+                date: "15-10-2026",
+                monthYear: "Oct-2026",
+                store: "Avenue Super marts Ltd Makarpura - vadodara",
+                period: "1/10/2026 to 15/10/2026",
+                ankhiQty: 18.450,
+                ankhiRate: 95,
+                ankhiTotal: 1752.75,
+                porQty: 3420,
+                porRate: 1.75,
+                porTotal: 5985.00,
+                grandTotal: 7738,
+                recordedAt: "2026-10-15 17:30:00"
+            },
+            {
+                invNo: 48,
+                date: "18-10-2026",
+                monthYear: "Oct-2026",
+                store: "Avenue Super marts Ltd Bhayali - vadodara",
+                period: "1/10/2026 to 15/10/2026",
+                ankhiQty: 24.120,
+                ankhiRate: 95,
+                ankhiTotal: 2291.40,
+                porQty: 4150,
+                porRate: 1.75,
+                porTotal: 7262.50,
+                grandTotal: 9554,
+                recordedAt: "2026-10-18 11:20:00"
+            }
+        ];
+
+        // -------------------------------------------------------------
+        // STORAGE & DATA BACKUP MANAGEMENT
+        // -------------------------------------------------------------
+        function getStoredBills() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_BILLS);
+                if (!raw) {
+                    // Initialize with baseline
+                    localStorage.setItem(STORAGE_KEY_BILLS, JSON.stringify(DEFAULT_BASELINE));
+                    return [...DEFAULT_BASELINE];
+                }
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [...DEFAULT_BASELINE];
+            } catch (e) {
+                console.error("Error reading stored bills:", e);
+                return [...DEFAULT_BASELINE];
+            }
+        }
+
+        function saveStoredBills(bills) {
+            localStorage.setItem(STORAGE_KEY_BILLS, JSON.stringify(bills));
+            updateAnalyticsUI();
+        }
+
+        function toggleAutoExcelSetting() {
+            const chk = document.getElementById('autoExcelDownloadCheck');
+            localStorage.setItem(STORAGE_KEY_AUTO_EXCEL, chk.checked ? '1' : '0');
+        }
+
+        // -------------------------------------------------------------
+        // LIVE INVOICE FORM CALCULATIONS
+        // -------------------------------------------------------------
+        function numberToIndianWords(num) {
+            num = Math.round(Number(num) || 0);
+            if (num === 0) return '';
+
+            const a = [
+                '', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ',
+                'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ',
+                'Seventeen ', 'Eighteen ', 'Nineteen '
+            ];
+            const b = ['', '', 'Twenty ', 'Thirty ', 'Forty ', 'Fifty ', 'Sixty ', 'Seventy ', 'Eighty ', 'Ninety '];
+
+            function twoDigits(n) {
+                if (n < 20) return a[n];
+                return b[Math.floor(n / 10)] + a[n % 10];
+            }
+
+            let str = '';
+            const crore = Math.floor(num / 10000000);
+            num %= 10000000;
+            const lakh = Math.floor(num / 100000);
+            num %= 100000;
+            const thousand = Math.floor(num / 1000);
+            num %= 1000;
+            const hundred = Math.floor(num / 100);
+            const rem = num % 100;
+
+            if (crore > 0) str += twoDigits(crore) + 'crore ';
+            if (lakh > 0) str += twoDigits(lakh) + 'lakh ';
+            if (thousand > 0) str += twoDigits(thousand) + 'thousand ';
+            if (hundred > 0) str += a[hundred] + 'hundred ';
+            if (rem > 0) str += twoDigits(rem);
+
+            const clean = str.trim().toLowerCase();
+            return clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+
+        function formatToIndianDate(yyyyMmDd) {
+            if (!yyyyMmDd) return '';
+            const parts = yyyyMmDd.split('-');
+            if (parts.length !== 3) return yyyyMmDd;
+            const y = parts[0];
+            const m = parseInt(parts[1], 10);
+            const d = parseInt(parts[2], 10);
+            return `${d}-${m}-${y}`;
+        }
+
+        function getMonthYearString(yyyyMmDd) {
+            if (!yyyyMmDd) return 'Oct-2026';
+            const d = new Date(yyyyMmDd + 'T00:00:00');
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return `${months[d.getMonth()]}-${d.getFullYear()}`;
+        }
+
+        function setPeriodPreset(half) {
+            const dateVal = document.getElementById('invDate').value;
+            const refDate = dateVal ? new Date(dateVal + 'T00:00:00') : new Date();
+            const year = refDate.getFullYear();
+            const month = refDate.getMonth() + 1;
+            const lastDay = new Date(year, month, 0).getDate();
+
+            const btnFirst = document.getElementById('btnFirstHalf');
+            const btnSecond = document.getElementById('btnSecondHalf');
+
+            if (half === 'FIRST') {
+                document.getElementById('billingPeriod').value = `1/${month}/${year} to 15/${month}/${year}`;
+                btnFirst.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-900 transition';
+                btnSecond.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 transition';
+            } else {
+                document.getElementById('billingPeriod').value = `16/${month}/${year} to ${lastDay}/${month}/${year}`;
+                btnSecond.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-900 transition';
+                btnFirst.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 transition';
+            }
+            syncInvoice();
+        }
+
+        function handleStoreChange() {
+            const sel = document.getElementById('storeSelect').value;
+            const customInput = document.getElementById('customStore');
+            if (sel === 'CUSTOM') {
+                customInput.classList.remove('hidden');
+                customInput.focus();
+            } else {
+                customInput.classList.add('hidden');
+            }
+            syncInvoice();
+        }
+
+        function syncInvoice() {
+            const invNo = document.getElementById('invNo').value.trim();
+            const invDateRaw = document.getElementById('invDate').value;
+            const storeSel = document.getElementById('storeSelect').value;
+            const storeName = storeSel === 'CUSTOM'
+                ? document.getElementById('customStore').value.trim()
+                : storeSel;
+            const period = document.getElementById('billingPeriod').value.trim();
+
+            const ankhiRaw = document.getElementById('ankhiQty').value;
+            const porRaw = document.getElementById('porQty').value;
+
+            const ankhiQty = parseFloat(ankhiRaw) || 0;
+            const porQty = parseFloat(porRaw) || 0;
+
+            const ankhiTotal = Math.round((ankhiQty * ANKHI_RATE) * 1000) / 1000;
+            const porTotal = Math.round((porQty * POR_RATE) * 100) / 100;
+            const grandTotal = Math.round(ankhiTotal + porTotal);
+            const words = numberToIndianWords(grandTotal);
+
+            // Update Month Badge
+            if (invDateRaw) {
+                const d = new Date(invDateRaw + 'T00:00:00');
+                document.getElementById('currentMonthBadge').textContent = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+            }
+
+            // Update Live UI Cards
+            document.getElementById('ankhiAmtDisplay').textContent = ankhiQty > 0 ? `₹${Number(ankhiTotal.toFixed(3))}` : '₹0.00';
+            document.getElementById('porAmtDisplay').textContent = porQty > 0 ? `₹${Number(porTotal.toFixed(2))}` : '₹0.00';
+            document.getElementById('grandTotalLive').textContent = `₹${grandTotal.toLocaleString('en-IN')}`;
+            document.getElementById('wordsLiveDisplay').textContent = words ? `${words}` : 'Zero';
+
+            // Populate Printable Invoice Template
+            document.getElementById('pdfInvNo').textContent = invNo;
+            document.getElementById('pdfInvDate').textContent = formatToIndianDate(invDateRaw);
+            document.getElementById('pdfStoreName').textContent = storeName;
+            document.getElementById('pdfPeriod').textContent = period;
+
+            document.getElementById('pdfAnkhiQty').innerHTML = ankhiRaw !== '' ? `${ankhiRaw}<br><span class="text-xs font-normal">Ton</span>` : '';
+            document.getElementById('pdfAnkhiTotal').textContent = ankhiRaw !== '' ? Number(ankhiTotal.toFixed(3)) : '';
+
+            document.getElementById('pdfPorQty').innerHTML = porRaw !== '' ? `${porRaw}<br><span class="text-xs font-normal">Box</span>` : '';
+            document.getElementById('pdfPorTotal').textContent = porRaw !== '' ? Number(porTotal.toFixed(2)) : '';
+
+            document.getElementById('pdfGrandTotal').textContent = grandTotal > 0 ? grandTotal : '';
+            document.getElementById('pdfWords').textContent = words;
+        }
+
+        // -------------------------------------------------------------
+        // AUTOMATIC DATA BACKUP ON EVERY RUN
+        // -------------------------------------------------------------
+        function recordCurrentInvoiceToBackup(showToastNotification = true) {
+            syncInvoice();
+            const invNo = parseInt(document.getElementById('invNo').value, 10);
+            if (!invNo) {
+                showToast("Missing Invoice #", "Please enter a valid invoice number.", false);
+                return null;
+            }
+
+            const invDateRaw = document.getElementById('invDate').value;
+            const storeSel = document.getElementById('storeSelect').value;
+            const storeName = storeSel === 'CUSTOM'
+                ? (document.getElementById('customStore').value.trim() || 'Custom D-Mart Branch')
+                : storeSel;
+            const period = document.getElementById('billingPeriod').value.trim();
+
+            const ankhiQty = parseFloat(document.getElementById('ankhiQty').value) || 0;
+            const porQty = parseFloat(document.getElementById('porQty').value) || 0;
+
+            const ankhiTotal = Math.round((ankhiQty * ANKHI_RATE) * 100) / 100;
+            const porTotal = Math.round((porQty * POR_RATE) * 100) / 100;
+            const grandTotal = Math.round(ankhiTotal + porTotal);
+
+            const now = new Date();
+            const recordedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+            const record = {
+                invNo: invNo,
+                date: formatToIndianDate(invDateRaw),
+                monthYear: getMonthYearString(invDateRaw),
+                store: storeName,
+                period: period,
+                ankhiQty: ankhiQty,
+                ankhiRate: ANKHI_RATE,
+                ankhiTotal: ankhiTotal,
+                porQty: porQty,
+                porRate: POR_RATE,
+                porTotal: porTotal,
+                grandTotal: grandTotal,
+                recordedAt: recordedAt
+            };
+
+            const bills = getStoredBills();
+            // Check if existing record with this invNo exists
+            const existingIdx = bills.findIndex(b => b.invNo === invNo);
+            if (existingIdx >= 0) {
+                bills[existingIdx] = record;
+            } else {
+                bills.push(record);
+            }
+
+            // Sort ascending by invNo
+            bills.sort((a, b) => a.invNo - b.invNo);
+            saveStoredBills(bills);
+
+            if (showToastNotification) {
+                showToast(
+                    `Invoice #${invNo} Backed Up!`,
+                    `Logged to Excel Backup. Grand Total: ₹${grandTotal.toLocaleString('en-IN')}`,
+                    true
+                );
+            }
+
+            // Check auto-export excel setting
+            const isAutoExcel = localStorage.getItem(STORAGE_KEY_AUTO_EXCEL) === '1';
+            if (isAutoExcel) {
+                downloadExcelBackup();
+            }
+
+            return record;
+        }
+
+        async function downloadPDF() {
+            syncInvoice();
+            const invNo = parseInt(document.getElementById('invNo').value, 10) || 48;
+            const storeSel = document.getElementById('storeSelect').value;
+            const shortBranch = storeSel.includes('Bhayali') ? 'Bhayali'
+                : storeSel.includes('Makarpura') ? 'Makarpura'
+                    : storeSel.includes('Manjalpur') ? 'Manjalpur'
+                        : storeSel.includes('Waghodia') ? 'Waghodia' : 'DMart';
+
+            // 1. AUTOMATICALLY RECORD DATA BACKUP ON EVERY RUN
+            recordCurrentInvoiceToBackup(true);
+
+            const btn = document.getElementById('downloadBtn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<span>Generating PDF...</span>`;
+            btn.disabled = true;
+
+            const element = document.getElementById('invoice-sheet');
+            const opt = {
+                margin: 0,
+                filename: `Invoice_${invNo}_${shortBranch}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            try {
+                await html2pdf().set(opt).from(element).save();
+                
+                // Auto-increment invoice number for next bill and save in localStorage
+                const nextInv = invNo + 1;
+                localStorage.setItem(STORAGE_KEY_INV, String(nextInv));
+                document.getElementById('invNo').value = nextInv;
+
+                // Clear unloading quantities for clean next bill run
+                document.getElementById('ankhiQty').value = '';
+                document.getElementById('porQty').value = '';
+                syncInvoice();
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // EXCEL WORKBOOK GENERATOR WITH SHEETJS
+        // -------------------------------------------------------------
+        function downloadExcelBackup() {
+            const records = getStoredBills();
+            if (!records.length) {
+                showToast("No Records", "No billing records found to export.", false);
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            // SHEET 1: Invoice_Backup
+            const ws1_data = [
+                ["PRADIP PATIL • D-MART BILLING RECORDS & DATA BACKUP"],
+                ["Contractor Code: 417744 | Loading & Unloading Services | Rates: Ankhi DC = ₹95/Ton, Por DC = ₹1.75/Box"],
+                [],
+                [
+                    "Inv #", "Invoice Date", "Month-Year", "D-Mart Store / Branch", "Billing Period",
+                    "Ankhi DC (Tons)", "Rate (₹/Ton)", "Ankhi Total (₹)",
+                    "Por DC (Boxes)", "Rate (₹/Box)", "Por Total (₹)",
+                    "Grand Total (₹)", "Recorded At"
+                ]
+            ];
+
+            records.forEach((r, idx) => {
+                const rowNum = 5 + idx; // 1-indexed Excel row
+                const ankhiTotal = Math.round((r.ankhiQty * (r.ankhiRate || 95)) * 100) / 100;
+                const porTotal = Math.round((r.porQty * (r.porRate || 1.75)) * 100) / 100;
+                const grandTotal = Math.round(ankhiTotal + porTotal);
+
+                ws1_data.push([
+                    r.invNo,
+                    r.date,
+                    r.monthYear || "Oct-2026",
+                    r.store,
+                    r.period,
+                    r.ankhiQty,
+                    r.ankhiRate || 95,
+                    { t: 'n', v: ankhiTotal, f: `ROUND(F${rowNum}*G${rowNum}, 2)` },
+                    r.porQty,
+                    r.porRate || 1.75,
+                    { t: 'n', v: porTotal, f: `ROUND(I${rowNum}*J${rowNum}, 2)` },
+                    { t: 'n', v: grandTotal, f: `ROUND(H${rowNum}+K${rowNum}, 0)` },
+                    r.recordedAt || new Date().toISOString()
+                ]);
+            });
+
+            // Summary Total Row
+            const totRow = 5 + records.length;
+            const sumAnkhiQty = records.reduce((acc, r) => acc + (r.ankhiQty || 0), 0);
+            const sumAnkhiTot = records.reduce((acc, r) => acc + (r.ankhiQty * (r.ankhiRate || 95)), 0);
+            const sumPorQty = records.reduce((acc, r) => acc + (r.porQty || 0), 0);
+            const sumPorTot = records.reduce((acc, r) => acc + (r.porQty * (r.porRate || 1.75)), 0);
+            const sumGrandTot = Math.round(sumAnkhiTot + sumPorTot);
+
+            ws1_data.push([
+                "TOTAL", "", "", "", "",
+                { t: 'n', v: sumAnkhiQty, f: `SUM(F5:F${totRow-1})` },
+                "",
+                { t: 'n', v: Math.round(sumAnkhiTot*100)/100, f: `SUM(H5:H${totRow-1})` },
+                { t: 'n', v: sumPorQty, f: `SUM(I5:I${totRow-1})` },
+                "",
+                { t: 'n', v: Math.round(sumPorTot*100)/100, f: `SUM(K5:K${totRow-1})` },
+                { t: 'n', v: sumGrandTot, f: `SUM(L5:L${totRow-1})` },
+                ""
+            ]);
+
+            const ws1 = XLSX.utils.aoa_to_sheet(ws1_data);
+            ws1['!cols'] = [
+                { wch: 9 }, { wch: 14 }, { wch: 13 }, { wch: 40 }, { wch: 25 },
+                { wch: 16 }, { wch: 13 }, { wch: 16 }, { wch: 15 }, { wch: 13 },
+                { wch: 16 }, { wch: 18 }, { wch: 22 }
+            ];
+            XLSX.utils.book_append_sheet(wb, ws1, "Invoice_Backup");
+
+            // SHEET 2: Analytics_Dashboard
+            const ws2_data = [
+                ["D-MART BILLING ANALYTICS & EXECUTIVE DASHBOARD"],
+                ["Live Key Performance Indicators and Store Distribution Analytics"],
+                [],
+                ["EXECUTIVE KPI METRIC", "CALCULATED VALUE", "DETAILS / RATE FORMULA"],
+                ["Total Revenue Billed", { t: 'n', v: sumGrandTot, f: "SUM(Invoice_Backup!L5:L1000)" }, "Sum of all invoices"],
+                ["Total Invoices Generated", { t: 'n', v: records.length, f: "COUNT(Invoice_Backup!A5:A1000)" }, "Count of bills"],
+                ["Total Ankhi DC (Tons)", { t: 'n', v: sumAnkhiQty, f: "SUM(Invoice_Backup!F5:F1000)" }, "Unloading Rate: ₹95 / Metric Ton"],
+                ["Total Ankhi Revenue", { t: 'n', v: Math.round(sumAnkhiTot*100)/100, f: "SUM(Invoice_Backup!H5:H1000)" }, "₹95.00/Ton"],
+                ["Total Por DC (Boxes)", { t: 'n', v: sumPorQty, f: "SUM(Invoice_Backup!I5:I1000)" }, "Unloading Rate: ₹1.75 / Box"],
+                ["Total Por Revenue", { t: 'n', v: Math.round(sumPorTot*100)/100, f: "SUM(Invoice_Backup!K5:K1000)" }, "₹1.75/Box"],
+                ["Average Invoice Value", { t: 'n', v: Math.round(sumGrandTot / (records.length || 1)), f: "IFERROR(AVERAGE(Invoice_Backup!L5:L1000), 0)" }, "Average bill value"],
+                [],
+                ["STORE-WISE PERFORMANCE BREAKDOWN"],
+                ["Store / Branch", "Keyword", "Bills Count", "Ankhi Tons", "Por Boxes", "Revenue (₹)", "% Share"],
+                ["Avenue Super marts Ltd Bhayali - vadodara", "Bhayali", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'IFERROR(F15/$B$5, 0)' }],
+                ["Avenue Super marts Ltd Makarpura - vadodara", "Makarpura", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'IFERROR(F16/$B$5, 0)' }],
+                ["Avenue Super marts Ltd Manjalpur - vadodara", "Manjalpur", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'IFERROR(F17/$B$5, 0)' }],
+                ["Avenue Super marts Ltd Waghodia - vadodara", "Waghodia", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'IFERROR(F18/$B$5, 0)' }]
+            ];
+
+            const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
+            ws2['!cols'] = [
+                { wch: 38 }, { wch: 22 }, { wch: 15 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 15 }
+            ];
+            XLSX.utils.book_append_sheet(wb, ws2, "Analytics_Dashboard");
+
+            // Trigger file download
+            XLSX.writeFile(wb, "DMart_Billing_Backup.xlsx");
+            showToast("Excel Exported!", "DMart_Billing_Backup.xlsx downloaded successfully.", true);
+        }
+
+        // -------------------------------------------------------------
+        // LIVE ANALYTICS COMPUTATION & UI RENDERING
+        // -------------------------------------------------------------
+        function updateAnalyticsUI() {
+            const bills = getStoredBills();
+
+            // 1. Executive KPIs
+            const totalRev = bills.reduce((acc, b) => acc + (b.grandTotal || 0), 0);
+            const count = bills.length;
+            const avgRev = count > 0 ? Math.round(totalRev / count) : 0;
+            const totalAnkhiTons = bills.reduce((acc, b) => acc + (b.ankhiQty || 0), 0);
+            const totalAnkhiRev = bills.reduce((acc, b) => acc + (b.ankhiTotal || (b.ankhiQty * (b.ankhiRate || 95))), 0);
+            const totalPorBoxes = bills.reduce((acc, b) => acc + (b.porQty || 0), 0);
+            const totalPorRev = bills.reduce((acc, b) => acc + (b.porTotal || (b.porQty * (b.porRate || 1.75))), 0);
+
+            // Badges & Quick Bar
+            document.getElementById('badgeInvoiceCount').textContent = count;
+            document.getElementById('quickBarCount').textContent = `${count} ${count === 1 ? 'Invoice' : 'Invoices'}`;
+            document.getElementById('quickBarTotal').textContent = `₹${totalRev.toLocaleString('en-IN')}`;
+            document.getElementById('tabBadgeHistory').textContent = count;
+
+            // Overview Tab Cards
+            document.getElementById('kpiRevenue').textContent = `₹${totalRev.toLocaleString('en-IN')}`;
+            document.getElementById('kpiInvoiceCount').textContent = count;
+            document.getElementById('kpiAvgAmount').textContent = `Avg: ₹${avgRev.toLocaleString('en-IN')} / bill`;
+            document.getElementById('kpiAnkhiQty').textContent = `${totalAnkhiTons.toFixed(3)} T`;
+            document.getElementById('kpiAnkhiRevenue').textContent = `Earnings: ₹${totalAnkhiRev.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('kpiPorQty').textContent = `${totalPorBoxes.toLocaleString('en-IN')} Boxes`;
+            document.getElementById('kpiPorRevenue').textContent = `Earnings: ₹${totalPorRev.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            // 2. Store Breakdown
+            const storeBranches = [
+                { name: 'Bhayali - Vadodara', kw: 'bhayali', color: 'bg-amber-500' },
+                { name: 'Makarpura - Vadodara', kw: 'makarpura', color: 'bg-blue-500' },
+                { name: 'Manjalpur - Vadodara', kw: 'manjalpur', color: 'bg-emerald-500' },
+                { name: 'Waghodia Road - Vadodara', kw: 'waghodia', color: 'bg-purple-500' },
+                { name: 'Other Stores', kw: 'other', color: 'bg-slate-500' }
+            ];
+
+            const storeStats = storeBranches.map(st => {
+                const matched = bills.filter(b => {
+                    const s = (b.store || '').toLowerCase();
+                    if (st.kw === 'other') {
+                        return !s.includes('bhayali') && !s.includes('makarpura') && !s.includes('manjalpur') && !s.includes('waghodia');
+                    }
+                    return s.includes(st.kw);
+                });
+
+                const stRev = matched.reduce((acc, b) => acc + (b.grandTotal || 0), 0);
+                const stAnkhi = matched.reduce((acc, b) => acc + (b.ankhiQty || 0), 0);
+                const stPor = matched.reduce((acc, b) => acc + (b.porQty || 0), 0);
+                const pct = totalRev > 0 ? ((stRev / totalRev) * 100).toFixed(1) : '0.0';
+
+                return {
+                    name: st.name,
+                    color: st.color,
+                    count: matched.length,
+                    ankhi: stAnkhi,
+                    por: stPor,
+                    revenue: stRev,
+                    pct: pct
+                };
+            });
+
+            const storeContainer = document.getElementById('storeBreakdownContainer');
+            storeContainer.innerHTML = storeStats.map(st => `
+                <div class="border border-slate-100 rounded-lg p-2.5 bg-slate-50/60">
+                    <div class="flex items-center justify-between text-xs mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full ${st.color}"></span>
+                            <span class="font-bold text-slate-800">${st.name}</span>
+                            <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-semibold">${st.count} bills</span>
+                        </div>
+                        <div class="font-extrabold text-slate-900">₹${st.revenue.toLocaleString('en-IN')} <span class="text-[11px] font-normal text-slate-500">(${st.pct}%)</span></div>
+                    </div>
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div class="${st.color} h-full transition-all duration-500" style="width: ${st.pct}%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                        <span>Ankhi: <strong>${st.ankhi.toFixed(3)} Ton</strong></span>
+                        <span>Por: <strong>${st.por.toLocaleString('en-IN')} Box</strong></span>
+                    </div>
+                </div>
+            `).join('');
+
+            // 3. Monthly Trends
+            const monthMap = {};
+            bills.forEach(b => {
+                const my = b.monthYear || 'Oct-2026';
+                if (!monthMap[my]) {
+                    monthMap[my] = { count: 0, revenue: 0, ankhi: 0, por: 0 };
+                }
+                monthMap[my].count += 1;
+                monthMap[my].revenue += (b.grandTotal || 0);
+                monthMap[my].ankhi += (b.ankhiQty || 0);
+                monthMap[my].por += (b.porQty || 0);
+            });
+
+            const monthContainer = document.getElementById('monthlyTrendsContainer');
+            monthContainer.innerHTML = Object.entries(monthMap).map(([my, data]) => `
+                <div class="border border-slate-200 rounded-lg p-3 bg-gradient-to-br from-slate-50 to-white">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-bold text-slate-700">${my}</span>
+                        <span class="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded">${data.count} bills</span>
+                    </div>
+                    <div class="text-lg font-black text-slate-900">₹${data.revenue.toLocaleString('en-IN')}</div>
+                    <div class="text-[11px] text-slate-500 mt-1 flex justify-between">
+                        <span>Ankhi: ${data.ankhi.toFixed(2)} T</span>
+                        <span>Por: ${data.por.toLocaleString('en-IN')} B</span>
+                    </div>
+                </div>
+            `).join('');
+
+            renderHistoryTable(bills);
+        }
+
+        function renderHistoryTable(bills = null) {
+            if (!bills) bills = getStoredBills();
+            const tbody = document.getElementById('historyTableBody');
+            if (!bills.length) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No invoices logged yet. Create your first bill!</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = bills.map(b => `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-3 font-bold text-slate-900">#${b.invNo}</td>
+                    <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">${b.date}</td>
+                    <td class="py-2.5 px-3">
+                        <div class="font-medium text-slate-800 line-clamp-1 max-w-[200px]" title="${b.store}">${b.store}</div>
+                        <div class="text-[10px] text-slate-400">${b.period}</div>
+                    </td>
+                    <td class="py-2.5 px-3 text-right font-medium text-amber-800">${b.ankhiQty ? b.ankhiQty.toFixed(3) : '0'}</td>
+                    <td class="py-2.5 px-3 text-right font-medium text-blue-800">${b.porQty ? b.porQty.toLocaleString('en-IN') : '0'}</td>
+                    <td class="py-2.5 px-3 text-right font-extrabold text-slate-900">₹${b.grandTotal ? b.grandTotal.toLocaleString('en-IN') : 0}</td>
+                    <td class="py-2.5 px-3 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button onclick="loadBillIntoForm(${b.invNo})" title="Load into form"
+                                class="p-1 hover:bg-amber-100 text-amber-700 rounded transition">
+                                ✏️
+                            </button>
+                            <button onclick="deleteBillRecord(${b.invNo})" title="Delete record"
+                                class="p-1 hover:bg-red-100 text-red-600 rounded transition">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterHistoryTable() {
+            const query = (document.getElementById('historySearchInput').value || '').toLowerCase().trim();
+            const bills = getStoredBills();
+            if (!query) {
+                renderHistoryTable(bills);
+                return;
+            }
+            const filtered = bills.filter(b => 
+                String(b.invNo).includes(query) ||
+                (b.store && b.store.toLowerCase().includes(query)) ||
+                (b.date && b.date.toLowerCase().includes(query)) ||
+                (b.monthYear && b.monthYear.toLowerCase().includes(query))
+            );
+            renderHistoryTable(filtered);
+        }
+
+        function loadBillIntoForm(invNo) {
+            const bills = getStoredBills();
+            const b = bills.find(item => item.invNo === invNo);
+            if (!b) return;
+
+            document.getElementById('invNo').value = b.invNo;
+            // Parse date if in DD-MM-YYYY to YYYY-MM-DD
+            if (b.date && b.date.includes('-')) {
+                const parts = b.date.split('-');
+                if (parts[0].length === 4) {
+                    document.getElementById('invDate').value = b.date;
+                } else if (parts[2].length === 4) {
+                    document.getElementById('invDate').value = `${parts[2]}-${String(parts[1]).padStart(2,'0')}-${String(parts[0]).padStart(2,'0')}`;
+                }
+            }
+
+            const storeSel = document.getElementById('storeSelect');
+            let found = false;
+            for (let opt of storeSel.options) {
+                if (opt.value === b.store) {
+                    storeSel.value = b.store;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                storeSel.value = 'CUSTOM';
+                const customInput = document.getElementById('customStore');
+                customInput.classList.remove('hidden');
+                customInput.value = b.store;
+            } else {
+                document.getElementById('customStore').classList.add('hidden');
+            }
+
+            document.getElementById('billingPeriod').value = b.period || '';
+            document.getElementById('ankhiQty').value = b.ankhiQty || '';
+            document.getElementById('porQty').value = b.porQty || '';
+
+            syncInvoice();
+            toggleAnalyticsModal();
+            showToast(`Loaded Bill #${invNo}`, "Form fields populated with invoice data.", true);
+        }
+
+        function deleteBillRecord(invNo) {
+            if (!confirm(`Are you sure you want to delete Invoice #${invNo} from backup?`)) return;
+            let bills = getStoredBills();
+            bills = bills.filter(b => b.invNo !== invNo);
+            saveStoredBills(bills);
+            showToast("Bill Deleted", `Invoice #${invNo} removed from backup.`, false);
+        }
+
+        function clearAllRecords() {
+            if (!confirm("Are you sure you want to CLEAR ALL BILLING RECORDS? This cannot be undone.")) return;
+            localStorage.removeItem(STORAGE_KEY_BILLS);
+            updateAnalyticsUI();
+            showToast("Records Cleared", "All billing records removed from local storage.", false);
+        }
+
+        function restoreDefaultBaseline() {
+            if (!confirm("Restore default baseline (Invoices #47 & #48)?")) return;
+            saveStoredBills([...DEFAULT_BASELINE]);
+            showToast("Baseline Restored", "Invoices #47 & #48 restored.", true);
+        }
+
+        function exportJsonBackup() {
+            const bills = getStoredBills();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(bills, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "dmart_billing_backup.json");
+            dlAnchorElem.click();
+        }
+
+        function importJsonBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed)) {
+                        saveStoredBills(parsed);
+                        showToast("Backup Imported", `Loaded ${parsed.length} invoices successfully!`, true);
+                    } else if (parsed.records && Array.isArray(parsed.records)) {
+                        saveStoredBills(parsed.records);
+                        showToast("Backup Imported", `Loaded ${parsed.records.length} invoices successfully!`, true);
+                    } else {
+                        alert("Invalid JSON format. Expected array of bill records.");
+                    }
+                } catch (err) {
+                    alert("Error parsing JSON: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // -------------------------------------------------------------
+        // UI TABS, MODALS & TOASTS
+        // -------------------------------------------------------------
+        function toggleAnalyticsModal() {
+            const modal = document.getElementById('analyticsModal');
+            if (modal.classList.contains('hidden')) {
+                updateAnalyticsUI();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function switchTab(tabName) {
+            ['overview', 'history', 'tools'].forEach(t => {
+                const btn = document.getElementById(`tabBtn-${t}`);
+                const content = document.getElementById(`tabContent-${t}`);
+                if (t === tabName) {
+                    btn.className = 'py-3 px-1 border-b-2 border-amber-500 text-amber-700 flex items-center gap-1.5 font-bold';
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = 'py-3 px-1 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 font-medium';
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        function togglePreviewModal() {
+            const modal = document.getElementById('previewModal');
+            const container = document.getElementById('modalPreviewContainer');
+            if (modal.classList.contains('hidden')) {
+                syncInvoice();
+                container.innerHTML = document.getElementById('print-area').innerHTML;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        let toastTimer = null;
+        function showToast(title, message, isSuccess = true) {
+            const toast = document.getElementById('toastNotification');
+            document.getElementById('toastTitle').textContent = title;
+            document.getElementById('toastMessage').textContent = message;
+
+            const icon = document.getElementById('toastIcon');
+            if (isSuccess) {
+                icon.className = "w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0";
+            } else {
+                icon.className = "w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0";
+            }
+
+            toast.classList.remove('translate-y-[-150%]', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(hideToast, 4000);
+        }
+
+        function hideToast() {
+            const toast = document.getElementById('toastNotification');
+            toast.classList.remove('translate-y-0', 'opacity-100');
+            toast.classList.add('translate-y-[-150%]', 'opacity-0', 'pointer-events-none');
+        }
+
+        // -------------------------------------------------------------
+        // APP INITIALIZATION
+        // -------------------------------------------------------------
+        window.addEventListener('DOMContentLoaded', () => {
+            // 1. Set today's date in YYYY-MM-DD
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            document.getElementById('invDate').value = `${yyyy}-${mm}-${dd}`;
+
+            // 2. Load auto-incremented Invoice #
+            const savedInv = localStorage.getItem(STORAGE_KEY_INV);
+            document.getElementById('invNo').value = savedInv ? parseInt(savedInv, 10) : 48;
+
+            // 3. Default Billing Period based on day of month (1-15 vs 16-End)
+            if (now.getDate() <= 15) {
+                setPeriodPreset('FIRST');
+            } else {
+                setPeriodPreset('SECOND');
+            }
+
+            // 4. Auto Excel setting
+            const isAutoExcel = localStorage.getItem(STORAGE_KEY_AUTO_EXCEL) === '1';
+            document.getElementById('autoExcelDownloadCheck').checked = isAutoExcel;
+
+            // 5. Keep Ankhi DC and Por DC inputs blank
+            document.getElementById('ankhiQty').value = '';
+            document.getElementById('porQty').value = '';
+
+            // 6. Sync UI and calculate Analytics
+            syncInvoice();
+            updateAnalyticsUI();
+        });
+    </script>
+</body>
+
+</html>
