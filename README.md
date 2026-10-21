@@ -25,18 +25,20 @@ Automated billing invoice generator, Excel data backup, and analytics system tai
 
 ```
 billing-dmart/
-├── index.html                 # Bill maker app (Preview + Download)
-├── styles.css                 # Compiled Tailwind CSS (generated — run npm run build:css)
+├── public/                    # Everything that gets deployed (and nothing else)
+│   ├── index.html             # Bill maker app (Preview + Download)
+│   ├── styles.css             # Compiled Tailwind CSS (generated — run npm run build:css)
+│   ├── sw.js                  # Service worker for offline use
+│   ├── manifest.json          # PWA manifest
+│   ├── icons/                 # App icons
+│   └── vendor/                # Pinned html2pdf.js 0.10.1 and SheetJS 0.18.5
+├── wrangler.jsonc             # Cloudflare deploy config (publishes ./public only)
 ├── src/input.css              # Tailwind source
-├── tailwind.config.js         # Tailwind config (scans index.html)
-├── sw.js                      # Service worker for offline use
-├── manifest.json              # PWA manifest
-├── icons/                     # App icons
-├── vendor/                    # Pinned html2pdf.js 0.10.1 and SheetJS 0.18.5
-├── DMart_Billing_Backup.xlsx  # Master formatted Excel backup workbook with formulas
+├── tailwind.config.js         # Tailwind config (scans public/index.html)
+├── DMart_Billing_Backup.xlsx  # Master formatted Excel backup workbook (private, not deployed)
 ├── create_excel_backup.py     # Python script generating the Excel template via openpyxl
 ├── backup_manager.py          # Python CLI utility for analytics, adding bills, & export
-├── backup_records.json        # JSON data export of baseline invoices
+├── backup_records.json        # JSON data export of baseline invoices (private, not deployed)
 └── README.md                  # Project documentation
 ```
 
@@ -45,13 +47,13 @@ billing-dmart/
 ## 🛠️ Usage
 
 ### 1. Web Application
-Host the folder on any static HTTPS host (GitHub Pages, Netlify, etc.) — HTTPS is needed for offline mode and home-screen install. To run locally:
+Deployed to Cloudflare Workers with `npx wrangler deploy`; `wrangler.jsonc` publishes only the `public/` folder. HTTPS is needed for offline mode and home-screen install. To run locally:
 ```bash
-python -m http.server 3000
+python -m http.server 3000 --directory public
 ```
 Open [http://localhost:3000](http://localhost:3000) to create bills.
 
-After changing classes in `index.html`, rebuild the CSS and bump `CACHE_VERSION` in `sw.js`:
+After changing classes in `index.html`, rebuild the CSS and bump `CACHE_VERSION` in `public/sw.js`:
 ```bash
 npm install
 npm run build:css

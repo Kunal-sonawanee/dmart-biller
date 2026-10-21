@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dmart-biller",
+  "compatibility_date": "2026-10-19",
+  // Only the web app is published. Everything else in the repo (Excel data,
+  // Python scripts, node_modules) stays private.
+  "assets": {
+    "directory": "./public"
+  }
+}

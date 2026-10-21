@@ -1,9 +1,8 @@
 // Offline support: the app keeps working without internet once it has been opened.
 // Bump CACHE_VERSION whenever styles.css or vendor files change.
-const CACHE_VERSION = 'dmart-bills-v1';
+const CACHE_VERSION = 'dmart-bills-v2';
 const APP_SHELL = [
     './',
-    './index.html',
     './styles.css',
     './manifest.json',
     './vendor/html2pdf.bundle.min.js',
@@ -34,11 +33,14 @@ self.addEventListener('fetch', event => {
         event.respondWith(
             fetch(req)
                 .then(res => {
-                    const copy = res.clone();
-                    caches.open(CACHE_VERSION).then(cache => cache.put('./index.html', copy));
+                    // Hosts may redirect /index.html to /; a redirected response can't be replayed offline
+                    if (res.ok && !res.redirected) {
+                        const copy = res.clone();
+                        caches.open(CACHE_VERSION).then(cache => cache.put('./', copy));
+                    }
                     return res;
                 })
-                .catch(() => caches.match('./index.html'))
+                .catch(() => caches.match('./'))
         );
         return;
     }
