@@ -1,4 +1,4 @@
-# D-Mart Bill Generator & Analytics Hub (DMart-Biller)
+# D-Mart Bill Generator (DMart-Biller)
 
 Automated billing invoice generator, Excel data backup, and analytics system tailored for contractor billing (Pradip Patil • Code: 417744) servicing Avenue Supermarts Ltd (D-Mart) branches in Vadodara.
 
@@ -6,26 +6,18 @@ Automated billing invoice generator, Excel data backup, and analytics system tai
 
 ## 🚀 Key Features
 
-- **Automated Tax Invoice Generation**:
-  - Live calculations for **Ankhi DC Unloading (@ ₹95/Ton)** and **Por DC Unloading (@ ₹1.75/Box)**.
-  - Automatic invoice number incrementing.
-  - Indian numbering currency in words auto-conversion (e.g. *Seven Thousand Seven Hundred Thirty-Eight only*).
-  - One-click print-ready PDF invoice generation (`html2pdf.js`).
-- **Data Backup & Persistence**:
-  - Every bill generated is automatically logged to local storage backup history.
-  - Option to manually save bills to backup without generating a PDF.
-- **Excel Spreadsheet Export with Dynamic Formulas**:
-  - Exports a dual-sheet Microsoft Excel workbook (`DMart_Billing_Backup.xlsx`) via SheetJS (`xlsx`).
-  - **Sheet 1 (`Invoice_Backup`)**: Detailed transactional log with `=ROUND(...)` and `=SUM(...)` formulas.
-  - **Sheet 2 (`Analytics_Dashboard`)**: Executive KPI cards, store-wise performance breakdown with `=COUNTIF(...)` & `=SUMIFS(...)`, and monthly trend calculations.
-- **In-App Analytics Hub**:
-  - Real-time KPI summaries: Total Revenue, Total Invoices, Tons & Boxes unloaded, and earnings.
-  - Visual store distribution with color-coded progress bars for Bhayali, Makarpura, Manjalpur, Waghodia, etc.
-  - Searchable invoice history table with quick reload into form or deletion.
-  - JSON backup export and import for seamless sync across devices.
-- **Python CLI Management (`backup_manager.py`)**:
-  - Summary report in terminal (`python backup_manager.py summary`).
-  - Add invoices directly to Excel via command line (`python backup_manager.py add ...`).
+- **Single-screen mobile bill form** built for non-technical use: D-Mart store (tap to choose), billing half (1–15 / 16–end, current month selected automatically, with month arrows), Ankhi tons and Por boxes.
+- **Automatic Bill No. and date**: bill numbers continue from **50** and go up by one after each download; the date is always today.
+- **All fields required**: nothing is marked as required, but tapping Download with a field empty highlights it in red.
+- **Only two actions**: **Preview** (fit-to-screen view of the exact bill) and **Download** (PDF).
+- **Stores under contract**: Bhayali, Makarpura, Manjalpur, Sayajipura, Ankhol (Vadodara).
+- Live totals at **₹95/Ton** (Ankhi DC) and **₹1.75/Box** (Por DC), with Indian-numbering amount in words.
+- After each download the form clears, ready for the next bill.
+- Owner shortcut: **press and hold "Bill No."** (about 1 second) to correct the bill number.
+- **Installable app with offline support**: add it to the phone's home screen; it keeps working without internet once opened.
+- **Background record keeping** (not shown to the user): every downloaded bill is saved silently in the browser's local storage.
+  - Owner shortcut: press **Ctrl + Shift + E** on the bill screen to download `DMart_Billing_Backup.xlsx` (invoice log + analytics sheet with formulas).
+- **Python CLI (`backup_manager.py`)** for summaries and adding bills to the Excel workbook from the terminal.
 
 ---
 
@@ -33,13 +25,18 @@ Automated billing invoice generator, Excel data backup, and analytics system tai
 
 ```
 billing-dmart/
-├── index.html                 # Main billing app & Analytics Hub
+├── index.html                 # Bill maker app (Preview + Download)
+├── styles.css                 # Compiled Tailwind CSS (generated — run npm run build:css)
+├── src/input.css              # Tailwind source
+├── tailwind.config.js         # Tailwind config (scans index.html)
+├── sw.js                      # Service worker for offline use
 ├── manifest.json              # PWA manifest
+├── icons/                     # App icons
+├── vendor/                    # Pinned html2pdf.js 0.10.1 and SheetJS 0.18.5
 ├── DMart_Billing_Backup.xlsx  # Master formatted Excel backup workbook with formulas
 ├── create_excel_backup.py     # Python script generating the Excel template via openpyxl
 ├── backup_manager.py          # Python CLI utility for analytics, adding bills, & export
 ├── backup_records.json        # JSON data export of baseline invoices
-├── .gitignore                 # Standard project ignore rules
 └── README.md                  # Project documentation
 ```
 
@@ -48,11 +45,17 @@ billing-dmart/
 ## 🛠️ Usage
 
 ### 1. Web Application
-Simply open `index.html` in any modern web browser or serve it locally:
+Host the folder on any static HTTPS host (GitHub Pages, Netlify, etc.) — HTTPS is needed for offline mode and home-screen install. To run locally:
 ```bash
 python -m http.server 3000
 ```
-Open [http://localhost:3000](http://localhost:3000) to create bills and view analytics.
+Open [http://localhost:3000](http://localhost:3000) to create bills.
+
+After changing classes in `index.html`, rebuild the CSS and bump `CACHE_VERSION` in `sw.js`:
+```bash
+npm install
+npm run build:css
+```
 
 ### 2. Python CLI
 View live billing analytics:

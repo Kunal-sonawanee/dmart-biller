@@ -402,8 +402,8 @@ def create_billing_backup_excel(filename="DMart_Billing_Backup.xlsx"):
         ("Avenue Super marts Ltd Bhayali - vadodara", "Bhayali"),
         ("Avenue Super marts Ltd Makarpura - vadodara", "Makarpura"),
         ("Avenue Super marts Ltd Manjalpur - vadodara", "Manjalpur"),
-        ("Avenue Super marts Ltd Waghodia - vadodara", "Waghodia"),
-        ("Other / Custom D-Mart Branch", "")
+        ("Avenue Super marts Ltd Sayajipura - vadodara", "Sayajipura"),
+        ("Avenue Super marts Ltd Ankhol - vadodara", "Ankhol")
     ]
 
     for idx, (st_name, kw) in enumerate(stores):

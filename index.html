@@ -3,15 +3,20 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Pradip Patil - D-Mart Bill Generator & Analytics</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- html2pdf for Printable Invoices -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- SheetJS for Excel Backup (.xlsx) generation & formulas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Pradip Patil - D-Mart Bills</title>
+    <meta name="theme-color" content="#f59e0b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DMart Bills" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <!-- Compiled Tailwind CSS (rebuild with: npm run build:css) -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- html2pdf for Printable Invoices (vendored html2pdf.js 0.10.1) -->
+    <script src="vendor/html2pdf.bundle.min.js"></script>
     <style>
         /* Exact Invoice Table Styling matching original Excel sheet */
         .invoice-page {
@@ -75,14 +80,30 @@
             color: #111827;
         }
 
-        /* Custom scrollbar for analytics modal */
-        .custom-scroll::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        /* Hide number spinners so inputs look clean */
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
-        .custom-scroll::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1;
-            border-radius: 9999px;
+        input[type=number] { -moz-appearance: textfield; }
+
+        .choice {
+            border: 2px solid #e2e8f0;
+            background: #ffffff;
+            color: #334155;
+        }
+        .choice.active {
+            border-color: #f59e0b;
+            background: #fffbeb;
+            color: #78350f;
+        }
+
+        /* Missing-field highlight (shown only after tapping Download) */
+        .field.invalid,
+        .field-group.invalid {
+            border-color: #f87171 !important;
+            background-color: #fef2f2;
         }
 
         @media print {
@@ -111,464 +132,125 @@
     </style>
 </head>
 
-<body class="bg-slate-100 text-slate-900 min-h-screen pb-28 font-sans antialiased">
+<body class="bg-stone-100 text-slate-900 font-sans antialiased">
 
-    <!-- Top Compact App Header -->
-    <header class="bg-slate-900 text-white px-4 py-3 shadow-md sticky top-0 z-30 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-black text-sm">
-                PP
-            </div>
+    <div class="h-[100dvh] max-w-md mx-auto flex flex-col">
+
+        <!-- Header: name + automatic bill no. and date -->
+        <header class="shrink-0 bg-white border-b border-stone-200 px-4 py-3 flex items-center justify-between">
             <div>
-                <h1 class="text-sm sm:text-base font-bold tracking-tight text-amber-400 leading-tight">PRADIP PATIL</h1>
-                <p class="text-[11px] text-slate-300">D-Mart Invoice Generator • Code: 417744</p>
+                <h1 class="text-lg font-extrabold leading-tight">Pradip Patil</h1>
+                <p class="text-xs text-slate-500">D-Mart Bills</p>
             </div>
-        </div>
-        <div class="flex items-center gap-1.5 sm:gap-2">
-            <!-- Analytics & Backup Hub Button with Counter Badge -->
-            <button onclick="toggleAnalyticsModal()" id="headerAnalyticsBtn"
-                class="text-xs bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-bold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition active:scale-95">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                </svg>
-                <span class="hidden xs:inline">Analytics</span>
-                <span id="badgeInvoiceCount" class="bg-slate-950 text-amber-400 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold">2</span>
-            </button>
-            <button onclick="togglePreviewModal()"
-                class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg font-medium transition">
-                Preview
-            </button>
-        </div>
-    </header>
+            <div class="text-right">
+                <div id="invNoBadge" class="text-lg font-extrabold leading-tight select-none">Bill No. <span id="invNoLabel"></span></div>
+                <div id="invDateLabel" class="text-xs text-slate-500"></div>
+            </div>
+            <input type="hidden" id="invNo" />
+            <input type="hidden" id="invDate" />
+        </header>
 
-    <!-- Main Compact Single-Screen Form -->
-    <main class="max-w-md mx-auto p-3 space-y-3">
+        <main class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
 
-        <!-- Live Excel Backup & Analytics Status Bar -->
-        <div class="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-800 rounded-xl p-3 text-white shadow-sm border border-slate-700/80 flex items-center justify-between gap-2.5">
-            <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <div class="truncate">
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-xs font-bold text-slate-100">Excel Backup Active</span>
-                        <span class="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Auto-Log</span>
-                    </div>
-                    <div class="text-[11px] text-slate-300 truncate mt-0.5">
-                        Total Billed: <strong id="quickBarTotal" class="text-amber-400 font-extrabold">₹17,292</strong> • <span id="quickBarCount">2 Invoices</span>
+            <!-- Store -->
+            <section id="storeGroup" class="field-group bg-white rounded-2xl border border-stone-200 p-3.5 transition-colors">
+                <h2 class="text-sm font-semibold text-slate-600 mb-2.5">D-Mart</h2>
+                <div id="storeChoices" class="grid grid-cols-6 gap-2"></div>
+            </section>
+
+            <!-- Billing period -->
+            <section class="bg-white rounded-2xl border border-stone-200 p-3.5">
+                <div class="flex items-center justify-between mb-2.5">
+                    <h2 class="text-sm font-semibold text-slate-600">Bill for</h2>
+                    <div class="flex items-center -my-1.5">
+                        <button type="button" onclick="shiftPeriodMonth(-1)" aria-label="Previous month"
+                            class="w-8 h-8 rounded-lg text-slate-500 active:bg-stone-200 text-xl leading-none">‹</button>
+                        <span id="periodMonthLabel" class="text-sm font-bold text-slate-800 w-28 text-center"></span>
+                        <button type="button" onclick="shiftPeriodMonth(1)" aria-label="Next month"
+                            class="w-8 h-8 rounded-lg text-slate-500 active:bg-stone-200 text-xl leading-none">›</button>
                     </div>
                 </div>
-            </div>
-            <div class="flex items-center gap-1.5 shrink-0">
-                <button onclick="downloadExcelBackup()" title="Download DMart_Billing_Backup.xlsx"
-                    class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 shadow-sm transition active:scale-95">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    <span>.xlsx</span>
-                </button>
-                <button onclick="toggleAnalyticsModal()" title="View full analytics dashboard"
-                    class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1.5 rounded-lg font-medium transition">
-                    Hub ↗
-                </button>
-            </div>
-        </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="btnFirstHalf" onclick="setPeriodHalf('FIRST')"
+                        class="choice h-12 rounded-xl text-base font-bold transition">1 – 15</button>
+                    <button type="button" id="btnSecondHalf" onclick="setPeriodHalf('SECOND')"
+                        class="choice h-12 rounded-xl text-base font-bold transition"></button>
+                </div>
+                <input type="hidden" id="billingPeriod" />
+            </section>
 
-        <!-- Card 1: Invoice Meta (No, Date, Store) -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3.5 space-y-3">
+            <!-- Work done -->
+            <section class="grid grid-cols-2 gap-3">
+                <div class="bg-white rounded-2xl border border-stone-200 p-3.5">
+                    <label for="ankhiQty" class="block text-sm font-semibold text-slate-600 mb-2.5">Ankhi DC <span class="font-normal text-slate-400">· Tons</span></label>
+                    <input type="number" id="ankhiQty" step="0.001" inputmode="decimal" enterkeyhint="next" placeholder="0"
+                        oninput="clearInvalid(this); syncInvoice()"
+                        class="field w-full h-12 px-3 text-xl font-bold bg-stone-50 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:bg-white outline-none transition-colors" />
+                    <div class="flex items-center justify-between text-xs mt-2">
+                        <span class="text-slate-400">₹95/ton</span>
+                        <span id="ankhiAmtDisplay" class="font-semibold text-slate-700">₹0</span>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl border border-stone-200 p-3.5">
+                    <label for="porQty" class="block text-sm font-semibold text-slate-600 mb-2.5">Por DC <span class="font-normal text-slate-400">· Boxes</span></label>
+                    <input type="number" id="porQty" step="1" inputmode="numeric" enterkeyhint="done" placeholder="0"
+                        oninput="clearInvalid(this); syncInvoice()"
+                        class="field w-full h-12 px-3 text-xl font-bold bg-stone-50 border border-stone-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:bg-white outline-none transition-colors" />
+                    <div class="flex items-center justify-between text-xs mt-2">
+                        <span class="text-slate-400">₹1.75/box</span>
+                        <span id="porAmtDisplay" class="font-semibold text-slate-700">₹0</span>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Bottom bar: total + the only two actions -->
+        <footer class="shrink-0 bg-white border-t border-stone-200 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div class="flex items-baseline justify-between mb-3">
+                <span class="text-sm font-semibold text-slate-500">Total</span>
+                <span id="grandTotalLive" class="text-2xl font-extrabold text-slate-900">₹0</span>
+            </div>
             <div class="grid grid-cols-5 gap-2.5">
-                <!-- Auto Invoice Number -->
-                <div class="col-span-2">
-                    <div class="flex items-center justify-between mb-1">
-                        <label class="text-xs font-bold text-slate-600 uppercase">Invoice #</label>
-                        <span
-                            class="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">Auto</span>
-                    </div>
-                    <input type="number" id="invNo" oninput="syncInvoice()"
-                        class="w-full px-3 py-2 text-base font-bold bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none" />
-                </div>
-
-                <!-- Native Date Picker (Defaults to Today) -->
-                <div class="col-span-3">
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Invoice Date</label>
-                    <input type="date" id="invDate" onchange="syncInvoice()"
-                        class="w-full px-3 py-2 text-sm font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none" />
-                </div>
-            </div>
-
-            <!-- D-Mart Store Selection -->
-            <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Select D-Mart Store</label>
-                <select id="storeSelect" onchange="handleStoreChange()"
-                    class="w-full px-3 py-2.5 text-sm font-semibold bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none">
-                    <option value="Avenue Super marts Ltd Bhayali - vadodara">Bhayali - Vadodara</option>
-                    <option value="Avenue Super marts Ltd Makarpura - vadodara">Makarpura - Vadodara</option>
-                    <option value="Avenue Super marts Ltd Manjalpur - vadodara">Manjalpur - Vadodara</option>
-                    <option value="Avenue Super marts Ltd Waghodia - vadodara">Waghodia Road - Vadodara</option>
-                    <option value="CUSTOM">Other / Custom D-Mart Branch...</option>
-                </select>
-                <input type="text" id="customStore" oninput="syncInvoice()" placeholder="Enter full store name..."
-                    class="hidden mt-2 w-full px-3 py-2 text-sm bg-white border border-amber-400 rounded-lg outline-none" />
-            </div>
-        </div>
-
-        <!-- Card 2: Billing Period (Current Month Presets + Editable Field) -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3.5 space-y-2">
-            <div class="flex items-center justify-between">
-                <label class="text-xs font-bold text-slate-600 uppercase">Billing Period</label>
-                <span id="currentMonthBadge"
-                    class="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded"></span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-                <button type="button" id="btnFirstHalf" onclick="setPeriodPreset('FIRST')"
-                    class="py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 active:scale-[0.99] transition">
-                    1st to 15th
+                <button onclick="openPreview()"
+                    class="col-span-2 h-12 rounded-xl border-2 border-stone-300 bg-white text-slate-800 text-base font-bold active:bg-stone-100 transition">
+                    Preview
                 </button>
-                <button type="button" id="btnSecondHalf" onclick="setPeriodPreset('SECOND')"
-                    class="py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 active:scale-[0.99] transition">
-                    16th to End of Month
-                </button>
-            </div>
-
-            <input type="text" id="billingPeriod" oninput="syncInvoice()" placeholder="e.g. 1/10/2026 to 15/10/2026"
-                class="w-full px-3 py-2 text-sm font-medium bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:bg-white outline-none" />
-        </div>
-
-        <!-- Card 3: Unloading Quantities (Blank by Default) -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3.5 space-y-3">
-            <div class="grid grid-cols-2 gap-3">
-                <!-- Ankhi DC Unloading -->
-                <div class="bg-amber-50/60 border border-amber-200/80 rounded-xl p-2.5">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs font-bold text-slate-800">Ankhi DC (Ton)</span>
-                        <span class="text-[11px] font-semibold text-slate-500">₹95/Ton</span>
-                    </div>
-                    <input type="number" id="ankhiQty" step="0.001" inputmode="decimal" placeholder="0.000"
-                        oninput="syncInvoice()"
-                        class="w-full px-2.5 py-2 text-lg font-bold bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" />
-                    <div class="mt-1.5 flex justify-between items-center text-xs">
-                        <span class="text-slate-500">Amount:</span>
-                        <span id="ankhiAmtDisplay" class="font-bold text-slate-800">₹0.00</span>
-                    </div>
-                </div>
-
-                <!-- Por DC Unloading -->
-                <div class="bg-blue-50/60 border border-blue-200/80 rounded-xl p-2.5">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs font-bold text-slate-800">Por DC (Box)</span>
-                        <span class="text-[11px] font-semibold text-slate-500">₹1.75/Box</span>
-                    </div>
-                    <input type="number" id="porQty" step="1" inputmode="numeric" placeholder="0"
-                        oninput="syncInvoice()"
-                        class="w-full px-2.5 py-2 text-lg font-bold bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                    <div class="mt-1.5 flex justify-between items-center text-xs">
-                        <span class="text-slate-500">Amount:</span>
-                        <span id="porAmtDisplay" class="font-bold text-slate-800">₹0.00</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Words Live Summary -->
-            <div class="bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
-                <div class="text-[10px] font-bold uppercase text-slate-400">Rupees in Words</div>
-                <div id="wordsLiveDisplay" class="text-xs font-semibold text-slate-700 truncate">Zero only</div>
-            </div>
-
-            <!-- Auto Backup Preferences -->
-            <div class="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs border-t border-slate-100">
-                <label class="flex items-center gap-2 cursor-pointer select-none text-slate-600 font-medium">
-                    <input type="checkbox" id="autoExcelDownloadCheck" onchange="toggleAutoExcelSetting()"
-                        class="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300">
-                    <span>Auto-export Excel on Bill Download</span>
-                </label>
-                <button type="button" onclick="recordCurrentInvoiceToBackup(true)"
-                    class="text-amber-700 hover:text-amber-800 font-bold hover:underline flex items-center gap-1">
-                    <span>💾 Save to Backup Only</span>
-                </button>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- Sticky Bottom Action Bar -->
-    <div class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2.5 shadow-lg z-20">
-        <div class="max-w-md mx-auto flex items-center justify-between gap-2.5">
-            <div>
-                <div class="text-[10px] font-bold uppercase text-slate-400">Grand Total (Rounded)</div>
-                <div id="grandTotalLive" class="text-xl font-extrabold text-slate-900">₹0</div>
-            </div>
-            
-            <div class="flex items-center gap-1.5 flex-1 justify-end">
-                <button onclick="downloadExcelBackup()" title="Download Excel Backup Spreadsheet"
-                    class="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold p-3 rounded-xl shadow-sm transition active:scale-95" aria-label="Export Excel">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <button onclick="downloadPDF()" data-download-btn
+                    class="col-span-3 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 text-base font-bold flex items-center justify-center gap-2 transition disabled:opacity-60">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                </button>
-                <button onclick="downloadPDF()" id="downloadBtn"
-                    class="flex-1 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-bold text-sm py-3 px-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                        stroke="currentColor" stroke-width="2.2">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    <span>Download PDF & Log</span>
+                    <span>Download</span>
                 </button>
             </div>
-        </div>
+        </footer>
     </div>
 
-    <!-- Interactive Toast Notification -->
-    <div id="toastNotification" class="fixed top-4 right-4 max-w-sm w-full bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700 p-3.5 z-50 transform translate-y-[-150%] opacity-0 transition-all duration-300 pointer-events-none">
-        <div class="flex items-start gap-3">
-            <div id="toastIcon" class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+    <!-- Message popup -->
+    <div id="toast" role="status"
+        class="fixed top-4 inset-x-4 max-w-md mx-auto rounded-2xl shadow-xl px-4 py-3.5 z-50 text-base font-semibold transition-all duration-300 -translate-y-[150%] opacity-0 pointer-events-none">
+    </div>
+
+    <!-- Preview -->
+    <div id="previewModal" class="fixed inset-0 bg-stone-900/90 z-40 hidden flex-col">
+        <div class="bg-white px-4 py-3 flex items-center justify-between">
+            <span class="text-base font-bold text-slate-900">Bill Preview</span>
+            <button onclick="closePreview()" class="h-10 px-4 rounded-xl bg-stone-100 text-slate-700 font-bold">Close</button>
+        </div>
+        <div id="previewScroll" class="flex-1 overflow-y-auto p-3">
+            <div id="previewFit" class="mx-auto bg-white shadow-lg overflow-hidden">
+                <div id="modalPreviewContainer" style="transform-origin: top left;"></div>
+            </div>
+        </div>
+        <div class="bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <button onclick="closePreview(); downloadPDF();" data-download-btn
+                class="max-w-md mx-auto w-full h-12 rounded-xl bg-amber-500 active:bg-amber-700 text-slate-950 text-base font-bold flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-            </div>
-            <div class="flex-1 min-w-0">
-                <h4 id="toastTitle" class="text-xs font-bold text-slate-100">Backup Updated</h4>
-                <p id="toastMessage" class="text-[11px] text-slate-300 mt-0.5 leading-snug">Invoice logged and analytics recalculated.</p>
-                <div id="toastActions" class="mt-2 flex items-center gap-2">
-                    <button onclick="toggleAnalyticsModal()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2 py-0.5 rounded font-bold transition">View Hub</button>
-                    <button onclick="downloadExcelBackup()" class="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded font-bold transition">Download Excel</button>
-                </div>
-            </div>
-            <button onclick="hideToast()" class="text-slate-400 hover:text-slate-200 text-sm">✕</button>
-        </div>
-    </div>
-
-    <!-- Analytics & Excel Backup Hub Modal -->
-    <div id="analyticsModal" class="fixed inset-0 bg-slate-900/80 z-40 hidden overflow-y-auto p-2 sm:p-4 backdrop-blur-sm">
-        <div class="max-w-4xl mx-auto my-3 sm:my-6 bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <!-- Modal Header -->
-            <div class="bg-slate-900 text-white px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-amber-500 text-slate-950">Analytics & Backup Hub</span>
-                        <span class="text-xs text-slate-400 font-mono">DMart_Billing_Backup.xlsx</span>
-                    </div>
-                    <h2 class="text-lg font-extrabold text-white mt-1">D-Mart Contractor Billing Analytics</h2>
-                    <p class="text-xs text-slate-300">Contractor: Pradip Patil (417744) • Live calculations across all logged invoices</p>
-                </div>
-                <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                    <button onclick="downloadExcelBackup()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span>Download Excel Sheet (.xlsx)</span>
-                    </button>
-                    <button onclick="toggleAnalyticsModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl font-bold text-xs transition">
-                        ✕ Close
-                    </button>
-                </div>
-            </div>
-
-            <!-- Tab Navigation -->
-            <div class="bg-slate-100 border-b border-slate-200 px-4 sm:px-6 flex gap-2 sm:gap-4 overflow-x-auto text-xs font-bold text-slate-600">
-                <button onclick="switchTab('overview')" id="tabBtn-overview" class="py-3 px-1 border-b-2 border-amber-500 text-amber-700 flex items-center gap-1.5">
-                    <span>📊 Analytics Dashboard</span>
-                </button>
-                <button onclick="switchTab('history')" id="tabBtn-history" class="py-3 px-1 border-b-2 border-transparent hover:text-slate-900 flex items-center gap-1.5">
-                    <span>📋 Bills History & Records</span>
-                    <span id="tabBadgeHistory" class="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full text-[10px]">2</span>
-                </button>
-                <button onclick="switchTab('tools')" id="tabBtn-tools" class="py-3 px-1 border-b-2 border-transparent hover:text-slate-900 flex items-center gap-1.5">
-                    <span>⚙️ Excel & Data Tools</span>
-                </button>
-            </div>
-
-            <!-- Modal Body Content -->
-            <div class="p-4 sm:p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scroll">
-
-                <!-- TAB 1: OVERVIEW & ANALYTICS -->
-                <div id="tabContent-overview" class="space-y-6">
-                    <!-- 4 KPI Cards -->
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                        <!-- Revenue -->
-                        <div class="bg-gradient-to-br from-amber-50 to-amber-100/70 border border-amber-200 rounded-xl p-3.5">
-                            <div class="text-[10px] font-bold uppercase tracking-wider text-amber-800">Total Billed Revenue</div>
-                            <div id="kpiRevenue" class="text-xl sm:text-2xl font-black text-amber-950 mt-1">₹0</div>
-                            <div class="text-[11px] text-amber-700 font-medium mt-1">From all backup bills</div>
-                        </div>
-
-                        <!-- Invoices -->
-                        <div class="bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-xl p-3.5">
-                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Invoices Generated</div>
-                            <div id="kpiInvoiceCount" class="text-xl sm:text-2xl font-black text-slate-900 mt-1">0</div>
-                            <div id="kpiAvgAmount" class="text-[11px] text-slate-600 font-medium mt-1">Avg: ₹0 / bill</div>
-                        </div>
-
-                        <!-- Ankhi DC -->
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100/70 border border-blue-200 rounded-xl p-3.5">
-                            <div class="flex items-center justify-between">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-800">Ankhi DC (Ton)</span>
-                                <span class="text-[10px] font-bold text-blue-600">₹95/Ton</span>
-                            </div>
-                            <div id="kpiAnkhiQty" class="text-xl sm:text-2xl font-black text-blue-950 mt-1">0.000 T</div>
-                            <div id="kpiAnkhiRevenue" class="text-[11px] text-blue-700 font-medium mt-1">Earnings: ₹0.00</div>
-                        </div>
-
-                        <!-- Por DC -->
-                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100/70 border border-emerald-200 rounded-xl p-3.5">
-                            <div class="flex items-center justify-between">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Por DC (Box)</span>
-                                <span class="text-[10px] font-bold text-emerald-600">₹1.75/Box</span>
-                            </div>
-                            <div id="kpiPorQty" class="text-xl sm:text-2xl font-black text-emerald-950 mt-1">0 Boxes</div>
-                            <div id="kpiPorRevenue" class="text-[11px] text-emerald-700 font-medium mt-1">Earnings: ₹0.00</div>
-                        </div>
-                    </div>
-
-                    <!-- Store-Wise Breakdown -->
-                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-900">Store-Wise Performance Breakdown</h3>
-                                <p class="text-xs text-slate-500">Distribution of invoices, tons, boxes, and billing revenue across branches</p>
-                            </div>
-                            <span class="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded">Linked to Excel Formulas</span>
-                        </div>
-
-                        <div id="storeBreakdownContainer" class="space-y-2.5 pt-1">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-
-                    <!-- Monthly Trend Breakdown -->
-                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-bold text-slate-900">Monthly Billing Trends</h3>
-                            <span class="text-xs text-slate-500">Month-on-Month Summary</span>
-                        </div>
-                        <div id="monthlyTrendsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 2: BILLS HISTORY & RECORDS -->
-                <div id="tabContent-history" class="space-y-4 hidden">
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                        <div class="relative w-full sm:w-72">
-                            <input type="text" id="historySearchInput" oninput="filterHistoryTable()" placeholder="Search by inv #, store, date..."
-                                class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" />
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-2.5 top-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </div>
-                        <div class="flex items-center gap-2 text-xs">
-                            <button onclick="downloadExcelBackup()" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
-                                <span>Export Excel (.xlsx)</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead class="bg-slate-800 text-white font-bold text-[11px] uppercase tracking-wider">
-                                    <tr>
-                                        <th class="py-2.5 px-3">Inv #</th>
-                                        <th class="py-2.5 px-3">Date</th>
-                                        <th class="py-2.5 px-3">D-Mart Store</th>
-                                        <th class="py-2.5 px-3 text-right">Ankhi (Ton)</th>
-                                        <th class="py-2.5 px-3 text-right">Por (Box)</th>
-                                        <th class="py-2.5 px-3 text-right">Total (₹)</th>
-                                        <th class="py-2.5 px-3 text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="historyTableBody" class="divide-y divide-slate-200 font-medium">
-                                    <!-- Populated dynamically -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 3: EXCEL & DATA TOOLS -->
-                <div id="tabContent-tools" class="space-y-4 hidden">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Card: Excel Spreadsheet Sync -->
-                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-xl">📊</span>
-                                <h4 class="text-sm font-bold text-slate-900">Excel Backup File (.xlsx)</h4>
-                            </div>
-                            <p class="text-xs text-slate-600 leading-relaxed">
-                                Generates a dual-sheet Microsoft Excel file (<code class="bg-slate-200 px-1 py-0.5 rounded text-slate-800">DMart_Billing_Backup.xlsx</code>) containing all transactional rows with formulas and the Analytics Dashboard with executive KPIs.
-                            </p>
-                            <button onclick="downloadExcelBackup()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-2 shadow-sm transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                <span>Download Updated Excel File</span>
-                            </button>
-                        </div>
-
-                        <!-- Card: JSON Data Backup & Sync -->
-                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-xl">🔄</span>
-                                <h4 class="text-sm font-bold text-slate-900">JSON Data Backup & Restore</h4>
-                            </div>
-                            <p class="text-xs text-slate-600 leading-relaxed">
-                                Export raw JSON backup records to transfer across devices or sync with Python <code class="bg-slate-200 px-1 py-0.5 rounded text-slate-800">backup_manager.py</code>.
-                            </p>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button onclick="exportJsonBackup()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition">
-                                    Export JSON
-                                </button>
-                                <label class="bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-bold py-2 px-3 rounded-lg text-xs text-center cursor-pointer transition">
-                                    Import JSON
-                                    <input type="file" id="importJsonFileInput" accept=".json" onchange="importJsonBackup(event)" class="hidden" />
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Card: Python Automation Info -->
-                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 col-span-1 md:col-span-2">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Local Python Manager Ready</h4>
-                                <span class="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-mono">backup_manager.py</span>
-                            </div>
-                            <p class="text-xs text-slate-600">
-                                You can also manage the backup directly in your terminal via Python:
-                            </p>
-                            <pre class="bg-slate-900 text-amber-300 p-2.5 rounded-lg text-[11px] font-mono overflow-x-auto">python backup_manager.py summary
-python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 3200</pre>
-                        </div>
-
-                        <!-- Card: Reset / Baseline -->
-                        <div class="col-span-1 md:col-span-2 flex items-center justify-between pt-2 border-t border-slate-200">
-                            <button onclick="restoreDefaultBaseline()" class="text-xs text-slate-600 hover:text-slate-900 font-medium underline">
-                                Reset to Default Baseline (Invoices #47 &amp; #48)
-                            </button>
-                            <button onclick="clearAllRecords()" class="text-xs text-red-600 hover:text-red-700 font-bold">
-                                🗑️ Clear All Billing Records
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- Full-Screen Preview Modal (Optional on Mobile, Hidden by default) -->
-    <div id="previewModal" class="fixed inset-0 bg-slate-900/80 z-30 hidden overflow-y-auto p-3">
-        <div class="max-w-3xl mx-auto my-4">
-            <div class="flex justify-between items-center bg-slate-800 text-white px-4 py-2.5 rounded-t-xl">
-                <span class="text-sm font-bold">Exact Print Preview</span>
-                <button onclick="togglePreviewModal()" class="text-xs bg-slate-700 px-3 py-1 rounded-lg">Close ✕</button>
-            </div>
-            <div class="bg-slate-200 p-2 overflow-x-auto rounded-b-xl">
-                <div id="modalPreviewContainer" class="origin-top-left"></div>
-            </div>
+                <span>Download</span>
+            </button>
         </div>
     </div>
 
@@ -776,73 +458,83 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
         const POR_RATE = 1.75;
         const STORAGE_KEY_INV = 'pradip_patil_last_inv_no';
         const STORAGE_KEY_BILLS = 'pradip_patil_dmart_bills_v1';
-        const STORAGE_KEY_AUTO_EXCEL = 'pradip_patil_auto_excel_export';
+        const FIRST_BILL_NO = 50;   // bill numbering continues from here
 
-        // Initial Verified Baseline Records
-        const DEFAULT_BASELINE = [
-            {
-                invNo: 47,
-                date: "15-10-2026",
-                monthYear: "Oct-2026",
-                store: "Avenue Super marts Ltd Makarpura - vadodara",
-                period: "1/10/2026 to 15/10/2026",
-                ankhiQty: 18.450,
-                ankhiRate: 95,
-                ankhiTotal: 1752.75,
-                porQty: 3420,
-                porRate: 1.75,
-                porTotal: 5985.00,
-                grandTotal: 7738,
-                recordedAt: "2026-10-15 17:30:00"
-            },
-            {
-                invNo: 48,
-                date: "18-10-2026",
-                monthYear: "Oct-2026",
-                store: "Avenue Super marts Ltd Bhayali - vadodara",
-                period: "1/10/2026 to 15/10/2026",
-                ankhiQty: 24.120,
-                ankhiRate: 95,
-                ankhiTotal: 2291.40,
-                porQty: 4150,
-                porRate: 1.75,
-                porTotal: 7262.50,
-                grandTotal: 9554,
-                recordedAt: "2026-10-18 11:20:00"
-            }
+        // D-Mart stores under contract. `full` is what prints on the bill.
+        const STORES = [
+            { key: 'Bhayali', full: 'Avenue Super marts Ltd Bhayali - vadodara' },
+            { key: 'Makarpura', full: 'Avenue Super marts Ltd Makarpura - vadodara' },
+            { key: 'Manjalpur', full: 'Avenue Super marts Ltd Manjalpur - vadodara' },
+            { key: 'Sayajipura', full: 'Avenue Super marts Ltd Sayajipura - vadodara' },
+            { key: 'Ankhol', full: 'Avenue Super marts Ltd Ankhol - vadodara' }
         ];
 
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        // Form state that isn't held in an input
+        let selectedStore = null;            // entry from STORES
+        let periodYear = 0;
+        let periodMonth = 0;                 // 1-12
+        let periodHalf = 'FIRST';            // 'FIRST' | 'SECOND'
+        let isDownloading = false;
+
         // -------------------------------------------------------------
-        // STORAGE & DATA BACKUP MANAGEMENT
+        // BACKGROUND RECORD KEEPING (never shown to the user)
         // -------------------------------------------------------------
         function getStoredBills() {
             try {
-                const raw = localStorage.getItem(STORAGE_KEY_BILLS);
-                if (!raw) {
-                    // Initialize with baseline
-                    localStorage.setItem(STORAGE_KEY_BILLS, JSON.stringify(DEFAULT_BASELINE));
-                    return [...DEFAULT_BASELINE];
-                }
-                const parsed = JSON.parse(raw);
-                return Array.isArray(parsed) ? parsed : [...DEFAULT_BASELINE];
+                const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY_BILLS) || '[]');
+                return Array.isArray(parsed) ? parsed : [];
             } catch (e) {
                 console.error("Error reading stored bills:", e);
-                return [...DEFAULT_BASELINE];
+                return [];
             }
         }
 
-        function saveStoredBills(bills) {
-            localStorage.setItem(STORAGE_KEY_BILLS, JSON.stringify(bills));
-            updateAnalyticsUI();
-        }
+        function recordBillSilently() {
+            try {
+                const invNo = parseInt(document.getElementById('invNo').value, 10);
+                const invDateRaw = document.getElementById('invDate').value;
+                const ankhiQty = parseFloat(document.getElementById('ankhiQty').value) || 0;
+                const porQty = parseFloat(document.getElementById('porQty').value) || 0;
+                const ankhiTotal = Math.round((ankhiQty * ANKHI_RATE) * 100) / 100;
+                const porTotal = Math.round((porQty * POR_RATE) * 100) / 100;
 
-        function toggleAutoExcelSetting() {
-            const chk = document.getElementById('autoExcelDownloadCheck');
-            localStorage.setItem(STORAGE_KEY_AUTO_EXCEL, chk.checked ? '1' : '0');
+                const now = new Date();
+                const pad = n => String(n).padStart(2, '0');
+                const recordedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+                const record = {
+                    invNo: invNo,
+                    date: formatToIndianDate(invDateRaw),
+                    monthYear: getMonthYearString(invDateRaw),
+                    store: selectedStore.full,
+                    period: document.getElementById('billingPeriod').value,
+                    ankhiQty: ankhiQty,
+                    ankhiRate: ANKHI_RATE,
+                    ankhiTotal: ankhiTotal,
+                    porQty: porQty,
+                    porRate: POR_RATE,
+                    porTotal: porTotal,
+                    grandTotal: Math.round(ankhiTotal + porTotal),
+                    recordedAt: recordedAt
+                };
+
+                const bills = getStoredBills();
+                const existingIdx = bills.findIndex(b => b.invNo === invNo);
+                if (existingIdx >= 0) bills[existingIdx] = record;
+                else bills.push(record);
+                bills.sort((a, b) => a.invNo - b.invNo);
+                localStorage.setItem(STORAGE_KEY_BILLS, JSON.stringify(bills));
+            } catch (e) {
+                // Record keeping must never get in the way of making a bill.
+                console.error("Background record failed:", e);
+            }
         }
 
         // -------------------------------------------------------------
-        // LIVE INVOICE FORM CALCULATIONS
+        // FORMATTING HELPERS
         // -------------------------------------------------------------
         function numberToIndianWords(num) {
             num = Math.round(Number(num) || 0);
@@ -893,51 +585,96 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
         function getMonthYearString(yyyyMmDd) {
             if (!yyyyMmDd) return 'Oct-2026';
             const d = new Date(yyyyMmDd + 'T00:00:00');
-            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            return `${months[d.getMonth()]}-${d.getFullYear()}`;
+            return `${MONTHS[d.getMonth()]}-${d.getFullYear()}`;
         }
 
-        function setPeriodPreset(half) {
-            const dateVal = document.getElementById('invDate').value;
-            const refDate = dateVal ? new Date(dateVal + 'T00:00:00') : new Date();
-            const year = refDate.getFullYear();
-            const month = refDate.getMonth() + 1;
-            const lastDay = new Date(year, month, 0).getDate();
+        function rupees(n) {
+            return '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        }
 
-            const btnFirst = document.getElementById('btnFirstHalf');
-            const btnSecond = document.getElementById('btnSecondHalf');
+        // -------------------------------------------------------------
+        // AUTOMATIC BILL NO. & DATE
+        // -------------------------------------------------------------
+        function setInvNo(n) {
+            document.getElementById('invNo').value = n;
+            document.getElementById('invNoLabel').textContent = n;
+        }
 
-            if (half === 'FIRST') {
-                document.getElementById('billingPeriod').value = `1/${month}/${year} to 15/${month}/${year}`;
-                btnFirst.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-900 transition';
-                btnSecond.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 transition';
-            } else {
-                document.getElementById('billingPeriod').value = `16/${month}/${year} to ${lastDay}/${month}/${year}`;
-                btnSecond.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border-2 border-amber-500 bg-amber-50 text-amber-900 transition';
-                btnFirst.className = 'py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 text-slate-700 transition';
-            }
+        // Next bill no.: the saved counter (never below FIRST_BILL_NO). If the counter
+        // is missing, carry on after the highest bill recorded on this device.
+        function nextBillNo() {
+            const saved = parseInt(localStorage.getItem(STORAGE_KEY_INV), 10) || 0;
+            if (saved) return Math.max(FIRST_BILL_NO, saved);
+            const maxRecorded = getStoredBills().reduce((m, b) => Math.max(m, Number(b.invNo) || 0), 0);
+            return Math.max(FIRST_BILL_NO, maxRecorded + 1);
+        }
+
+        // Always today's date (refreshed in case the app stays open past midnight)
+        function refreshToday() {
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            document.getElementById('invDate').value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+            document.getElementById('invDateLabel').textContent = `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+        }
+
+        // -------------------------------------------------------------
+        // STORE PICKER
+        // -------------------------------------------------------------
+        function renderStoreChoices() {
+            // 6-column grid: rows of three; when two are left over they share the last row evenly
+            const n = STORES.length;
+            document.getElementById('storeChoices').innerHTML = STORES.map((st, i) => `
+                <button type="button" onclick="selectStore('${st.key}')"
+                    class="choice ${selectedStore && selectedStore.key === st.key ? 'active' : ''} ${n % 3 === 2 && i >= n - 2 ? 'col-span-3' : 'col-span-2'} h-12 rounded-xl text-[15px] font-bold transition">
+                    ${st.key}
+                </button>
+            `).join('');
+        }
+
+        function selectStore(key) {
+            selectedStore = STORES.find(s => s.key === key) || null;
+            clearInvalid(document.getElementById('storeGroup'));
+            renderStoreChoices();
             syncInvoice();
         }
 
-        function handleStoreChange() {
-            const sel = document.getElementById('storeSelect').value;
-            const customInput = document.getElementById('customStore');
-            if (sel === 'CUSTOM') {
-                customInput.classList.remove('hidden');
-                customInput.focus();
-            } else {
-                customInput.classList.add('hidden');
-            }
+        // -------------------------------------------------------------
+        // BILLING PERIOD
+        // -------------------------------------------------------------
+        function renderPeriod() {
+            const lastDay = new Date(periodYear, periodMonth, 0).getDate();
+            const m = periodMonth, y = periodYear;
+
+            document.getElementById('periodMonthLabel').textContent = `${MONTHS_FULL[m - 1]} ${y}`;
+            document.getElementById('btnSecondHalf').textContent = `16 – ${lastDay}`;
+            document.getElementById('btnFirstHalf').classList.toggle('active', periodHalf === 'FIRST');
+            document.getElementById('btnSecondHalf').classList.toggle('active', periodHalf === 'SECOND');
+
+            document.getElementById('billingPeriod').value = periodHalf === 'FIRST'
+                ? `1/${m}/${y} to 15/${m}/${y}`
+                : `16/${m}/${y} to ${lastDay}/${m}/${y}`;
             syncInvoice();
         }
 
+        function setPeriodHalf(half) {
+            periodHalf = half;
+            renderPeriod();
+        }
+
+        function shiftPeriodMonth(delta) {
+            const d = new Date(periodYear, periodMonth - 1 + delta, 1);
+            periodYear = d.getFullYear();
+            periodMonth = d.getMonth() + 1;
+            renderPeriod();
+        }
+
+        // -------------------------------------------------------------
+        // LIVE CALCULATION + PRINTABLE BILL
+        // -------------------------------------------------------------
         function syncInvoice() {
             const invNo = document.getElementById('invNo').value.trim();
             const invDateRaw = document.getElementById('invDate').value;
-            const storeSel = document.getElementById('storeSelect').value;
-            const storeName = storeSel === 'CUSTOM'
-                ? document.getElementById('customStore').value.trim()
-                : storeSel;
+            const storeName = selectedStore ? selectedStore.full : '';
             const period = document.getElementById('billingPeriod').value.trim();
 
             const ankhiRaw = document.getElementById('ankhiQty').value;
@@ -951,19 +688,12 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
             const grandTotal = Math.round(ankhiTotal + porTotal);
             const words = numberToIndianWords(grandTotal);
 
-            // Update Month Badge
-            if (invDateRaw) {
-                const d = new Date(invDateRaw + 'T00:00:00');
-                document.getElementById('currentMonthBadge').textContent = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-            }
-
-            // Update Live UI Cards
-            document.getElementById('ankhiAmtDisplay').textContent = ankhiQty > 0 ? `₹${Number(ankhiTotal.toFixed(3))}` : '₹0.00';
-            document.getElementById('porAmtDisplay').textContent = porQty > 0 ? `₹${Number(porTotal.toFixed(2))}` : '₹0.00';
+            // On-screen amounts
+            document.getElementById('ankhiAmtDisplay').textContent = rupees(ankhiTotal);
+            document.getElementById('porAmtDisplay').textContent = rupees(porTotal);
             document.getElementById('grandTotalLive').textContent = `₹${grandTotal.toLocaleString('en-IN')}`;
-            document.getElementById('wordsLiveDisplay').textContent = words ? `${words}` : 'Zero';
 
-            // Populate Printable Invoice Template
+            // Printable bill
             document.getElementById('pdfInvNo').textContent = invNo;
             document.getElementById('pdfInvDate').textContent = formatToIndianDate(invDateRaw);
             document.getElementById('pdfStoreName').textContent = storeName;
@@ -980,132 +710,154 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
         }
 
         // -------------------------------------------------------------
-        // AUTOMATIC DATA BACKUP ON EVERY RUN
+        // REQUIRED FIELDS — highlighted only when something is missing
         // -------------------------------------------------------------
-        function recordCurrentInvoiceToBackup(showToastNotification = true) {
-            syncInvoice();
-            const invNo = parseInt(document.getElementById('invNo').value, 10);
-            if (!invNo) {
-                showToast("Missing Invoice #", "Please enter a valid invoice number.", false);
-                return null;
-            }
-
-            const invDateRaw = document.getElementById('invDate').value;
-            const storeSel = document.getElementById('storeSelect').value;
-            const storeName = storeSel === 'CUSTOM'
-                ? (document.getElementById('customStore').value.trim() || 'Custom D-Mart Branch')
-                : storeSel;
-            const period = document.getElementById('billingPeriod').value.trim();
-
-            const ankhiQty = parseFloat(document.getElementById('ankhiQty').value) || 0;
-            const porQty = parseFloat(document.getElementById('porQty').value) || 0;
-
-            const ankhiTotal = Math.round((ankhiQty * ANKHI_RATE) * 100) / 100;
-            const porTotal = Math.round((porQty * POR_RATE) * 100) / 100;
-            const grandTotal = Math.round(ankhiTotal + porTotal);
-
-            const now = new Date();
-            const recordedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-
-            const record = {
-                invNo: invNo,
-                date: formatToIndianDate(invDateRaw),
-                monthYear: getMonthYearString(invDateRaw),
-                store: storeName,
-                period: period,
-                ankhiQty: ankhiQty,
-                ankhiRate: ANKHI_RATE,
-                ankhiTotal: ankhiTotal,
-                porQty: porQty,
-                porRate: POR_RATE,
-                porTotal: porTotal,
-                grandTotal: grandTotal,
-                recordedAt: recordedAt
-            };
-
-            const bills = getStoredBills();
-            // Check if existing record with this invNo exists
-            const existingIdx = bills.findIndex(b => b.invNo === invNo);
-            if (existingIdx >= 0) {
-                bills[existingIdx] = record;
-            } else {
-                bills.push(record);
-            }
-
-            // Sort ascending by invNo
-            bills.sort((a, b) => a.invNo - b.invNo);
-            saveStoredBills(bills);
-
-            if (showToastNotification) {
-                showToast(
-                    `Invoice #${invNo} Backed Up!`,
-                    `Logged to Excel Backup. Grand Total: ₹${grandTotal.toLocaleString('en-IN')}`,
-                    true
-                );
-            }
-
-            // Check auto-export excel setting
-            const isAutoExcel = localStorage.getItem(STORAGE_KEY_AUTO_EXCEL) === '1';
-            if (isAutoExcel) {
-                downloadExcelBackup();
-            }
-
-            return record;
+        function clearInvalid(el) {
+            el.classList.remove('invalid');
         }
 
+        // Marks every missing field and returns how many were missing.
+        function markMissingFields() {
+            const missing = [];
+            if (!selectedStore) missing.push(document.getElementById('storeGroup'));
+            ['ankhiQty', 'porQty'].forEach(id => {
+                const input = document.getElementById(id);
+                const val = input.value.trim();
+                if (val === '' || isNaN(parseFloat(val)) || parseFloat(val) < 0) missing.push(input);
+            });
+            missing.forEach(el => el.classList.add('invalid'));
+            return missing.length;
+        }
+
+        // -------------------------------------------------------------
+        // DOWNLOAD
+        // -------------------------------------------------------------
         async function downloadPDF() {
+            if (isDownloading) return;
+            refreshToday();
             syncInvoice();
-            const invNo = parseInt(document.getElementById('invNo').value, 10) || 48;
-            const storeSel = document.getElementById('storeSelect').value;
-            const shortBranch = storeSel.includes('Bhayali') ? 'Bhayali'
-                : storeSel.includes('Makarpura') ? 'Makarpura'
-                    : storeSel.includes('Manjalpur') ? 'Manjalpur'
-                        : storeSel.includes('Waghodia') ? 'Waghodia' : 'DMart';
 
-            // 1. AUTOMATICALLY RECORD DATA BACKUP ON EVERY RUN
-            recordCurrentInvoiceToBackup(true);
+            if (markMissingFields()) {
+                showToast('Please fill the highlighted fields.', false);
+                return;
+            }
 
-            const btn = document.getElementById('downloadBtn');
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = `<span>Generating PDF...</span>`;
-            btn.disabled = true;
+            const invNo = parseInt(document.getElementById('invNo').value, 10);
+            recordBillSilently();
 
-            const element = document.getElementById('invoice-sheet');
+            isDownloading = true;
+            const buttons = document.querySelectorAll('[data-download-btn]');
+            const originals = [...buttons].map(b => b.innerHTML);
+            buttons.forEach(b => { b.disabled = true; b.innerHTML = '<span>Please wait…</span>'; });
+
             const opt = {
                 margin: 0,
-                filename: `Invoice_${invNo}_${shortBranch}.pdf`,
+                filename: `Invoice_${invNo}_${selectedStore.key}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
             try {
-                await html2pdf().set(opt).from(element).save();
-                
-                // Auto-increment invoice number for next bill and save in localStorage
+                await html2pdf().set(opt).from(document.getElementById('invoice-sheet')).save();
+
+                // Ready the form for the next bill
                 const nextInv = invNo + 1;
                 localStorage.setItem(STORAGE_KEY_INV, String(nextInv));
-                document.getElementById('invNo').value = nextInv;
-
-                // Clear unloading quantities for clean next bill run
+                setInvNo(nextInv);
                 document.getElementById('ankhiQty').value = '';
                 document.getElementById('porQty').value = '';
+                selectedStore = null;
+                renderStoreChoices();
                 syncInvoice();
+                document.querySelector('main').scrollTo({ top: 0, behavior: 'smooth' });
+
+                showToast(`Bill No. ${invNo} downloaded`, true);
+            } catch (e) {
+                console.error(e);
+                showToast('Could not download the bill. Please try again.', false);
             } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
+                buttons.forEach((b, i) => { b.innerHTML = originals[i]; b.disabled = false; });
+                isDownloading = false;
             }
         }
 
         // -------------------------------------------------------------
-        // EXCEL WORKBOOK GENERATOR WITH SHEETJS
+        // PREVIEW (scaled to fit the screen)
         // -------------------------------------------------------------
-        function downloadExcelBackup() {
+        function openPreview() {
+            syncInvoice();
+            const container = document.getElementById('modalPreviewContainer');
+            const clone = document.getElementById('invoice-sheet').cloneNode(true);
+            // Strip ids so the copy never shadows the real bill used for the PDF
+            clone.removeAttribute('id');
+            clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            container.replaceChildren(clone);
+
+            const modal = document.getElementById('previewModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            fitPreview();
+        }
+
+        function closePreview() {
+            const modal = document.getElementById('previewModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+
+        function fitPreview() {
+            const container = document.getElementById('modalPreviewContainer');
+            const sheet = container.firstElementChild;
+            if (!sheet) return;
+            const avail = document.getElementById('previewScroll').clientWidth - 24;
+            const w = sheet.offsetWidth;
+            const scale = Math.min(1, avail / w);
+            container.style.width = `${w}px`;
+            container.style.transform = `scale(${scale})`;
+            const fit = document.getElementById('previewFit');
+            fit.style.width = `${w * scale}px`;
+            fit.style.height = `${sheet.offsetHeight * scale}px`;
+        }
+
+        // -------------------------------------------------------------
+        // MESSAGE POPUP
+        // -------------------------------------------------------------
+        const TOAST_BASE = 'fixed top-4 inset-x-4 max-w-md mx-auto rounded-2xl shadow-xl px-4 py-3.5 z-50 text-base font-semibold transition-all duration-300';
+        let toastTimer = null;
+        function showToast(message, isSuccess) {
+            const toast = document.getElementById('toast');
+            const colors = isSuccess ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-900 border border-amber-300';
+            toast.textContent = message;
+            toast.className = `${TOAST_BASE} ${colors} translate-y-0 opacity-100`;
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.className = `${TOAST_BASE} ${colors} -translate-y-[150%] opacity-0 pointer-events-none`;
+            }, 3500);
+        }
+
+        // -------------------------------------------------------------
+        // HIDDEN EXCEL EXPORT (Ctrl+Shift+E) — for the owner only
+        // -------------------------------------------------------------
+        // SheetJS is only needed here, so it's loaded on first use
+        function loadSheetJS() {
+            if (window.XLSX) return Promise.resolve();
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'vendor/xlsx.full.min.js';
+                s.onload = resolve;
+                s.onerror = reject;
+                document.head.appendChild(s);
+            });
+        }
+
+        async function downloadExcelBackup() {
             const records = getStoredBills();
-            if (!records.length) {
-                showToast("No Records", "No billing records found to export.", false);
-                return;
-            }
+            if (!records.length) return;
+            await loadSheetJS();
 
             const wb = XLSX.utils.book_new();
 
@@ -1173,7 +925,20 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
             ];
             XLSX.utils.book_append_sheet(wb, ws1, "Invoice_Backup");
 
-            // SHEET 2: Analytics_Dashboard
+            // SHEET 2: Analytics_Dashboard (store rows start at row 15)
+            const storeRows = STORES.map((st, i) => {
+                const like = `"*${st.key}*"`;
+                const range = col => `Invoice_Backup!$${col}$5:$${col}$1000`;
+                return [
+                    st.full, st.key,
+                    { t: 'n', f: `COUNTIF(${range('D')}, ${like})` },
+                    { t: 'n', f: `SUMIFS(${range('F')}, ${range('D')}, ${like})` },
+                    { t: 'n', f: `SUMIFS(${range('I')}, ${range('D')}, ${like})` },
+                    { t: 'n', f: `SUMIFS(${range('L')}, ${range('D')}, ${like})` },
+                    { t: 'n', f: `IFERROR(F${15 + i}/$B$5, 0)` }
+                ];
+            });
+
             const ws2_data = [
                 ["D-MART BILLING ANALYTICS & EXECUTIVE DASHBOARD"],
                 ["Live Key Performance Indicators and Store Distribution Analytics"],
@@ -1189,10 +954,7 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
                 [],
                 ["STORE-WISE PERFORMANCE BREAKDOWN"],
                 ["Store / Branch", "Keyword", "Bills Count", "Ankhi Tons", "Por Boxes", "Revenue (₹)", "% Share"],
-                ["Avenue Super marts Ltd Bhayali - vadodara", "Bhayali", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Bhayali*")' }, { t: 'n', f: 'IFERROR(F15/$B$5, 0)' }],
-                ["Avenue Super marts Ltd Makarpura - vadodara", "Makarpura", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Makarpura*")' }, { t: 'n', f: 'IFERROR(F16/$B$5, 0)' }],
-                ["Avenue Super marts Ltd Manjalpur - vadodara", "Manjalpur", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Manjalpur*")' }, { t: 'n', f: 'IFERROR(F17/$B$5, 0)' }],
-                ["Avenue Super marts Ltd Waghodia - vadodara", "Waghodia", { t: 'n', f: 'COUNTIF(Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$F$5:$F$1000, Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$I$5:$I$1000, Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'SUMIFS(Invoice_Backup!$L$5:$L$1000, Invoice_Backup!$D$5:$D$1000, "*Waghodia*")' }, { t: 'n', f: 'IFERROR(F18/$B$5, 0)' }]
+                ...storeRows
             ];
 
             const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
@@ -1201,373 +963,80 @@ python backup_manager.py add --inv 49 --store "Makarpura" --ankhi 15.20 --por 32
             ];
             XLSX.utils.book_append_sheet(wb, ws2, "Analytics_Dashboard");
 
-            // Trigger file download
             XLSX.writeFile(wb, "DMart_Billing_Backup.xlsx");
-            showToast("Excel Exported!", "DMart_Billing_Backup.xlsx downloaded successfully.", true);
         }
 
-        // -------------------------------------------------------------
-        // LIVE ANALYTICS COMPUTATION & UI RENDERING
-        // -------------------------------------------------------------
-        function updateAnalyticsUI() {
-            const bills = getStoredBills();
-
-            // 1. Executive KPIs
-            const totalRev = bills.reduce((acc, b) => acc + (b.grandTotal || 0), 0);
-            const count = bills.length;
-            const avgRev = count > 0 ? Math.round(totalRev / count) : 0;
-            const totalAnkhiTons = bills.reduce((acc, b) => acc + (b.ankhiQty || 0), 0);
-            const totalAnkhiRev = bills.reduce((acc, b) => acc + (b.ankhiTotal || (b.ankhiQty * (b.ankhiRate || 95))), 0);
-            const totalPorBoxes = bills.reduce((acc, b) => acc + (b.porQty || 0), 0);
-            const totalPorRev = bills.reduce((acc, b) => acc + (b.porTotal || (b.porQty * (b.porRate || 1.75))), 0);
-
-            // Badges & Quick Bar
-            document.getElementById('badgeInvoiceCount').textContent = count;
-            document.getElementById('quickBarCount').textContent = `${count} ${count === 1 ? 'Invoice' : 'Invoices'}`;
-            document.getElementById('quickBarTotal').textContent = `₹${totalRev.toLocaleString('en-IN')}`;
-            document.getElementById('tabBadgeHistory').textContent = count;
-
-            // Overview Tab Cards
-            document.getElementById('kpiRevenue').textContent = `₹${totalRev.toLocaleString('en-IN')}`;
-            document.getElementById('kpiInvoiceCount').textContent = count;
-            document.getElementById('kpiAvgAmount').textContent = `Avg: ₹${avgRev.toLocaleString('en-IN')} / bill`;
-            document.getElementById('kpiAnkhiQty').textContent = `${totalAnkhiTons.toFixed(3)} T`;
-            document.getElementById('kpiAnkhiRevenue').textContent = `Earnings: ₹${totalAnkhiRev.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            document.getElementById('kpiPorQty').textContent = `${totalPorBoxes.toLocaleString('en-IN')} Boxes`;
-            document.getElementById('kpiPorRevenue').textContent = `Earnings: ₹${totalPorRev.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-
-            // 2. Store Breakdown
-            const storeBranches = [
-                { name: 'Bhayali - Vadodara', kw: 'bhayali', color: 'bg-amber-500' },
-                { name: 'Makarpura - Vadodara', kw: 'makarpura', color: 'bg-blue-500' },
-                { name: 'Manjalpur - Vadodara', kw: 'manjalpur', color: 'bg-emerald-500' },
-                { name: 'Waghodia Road - Vadodara', kw: 'waghodia', color: 'bg-purple-500' },
-                { name: 'Other Stores', kw: 'other', color: 'bg-slate-500' }
-            ];
-
-            const storeStats = storeBranches.map(st => {
-                const matched = bills.filter(b => {
-                    const s = (b.store || '').toLowerCase();
-                    if (st.kw === 'other') {
-                        return !s.includes('bhayali') && !s.includes('makarpura') && !s.includes('manjalpur') && !s.includes('waghodia');
-                    }
-                    return s.includes(st.kw);
-                });
-
-                const stRev = matched.reduce((acc, b) => acc + (b.grandTotal || 0), 0);
-                const stAnkhi = matched.reduce((acc, b) => acc + (b.ankhiQty || 0), 0);
-                const stPor = matched.reduce((acc, b) => acc + (b.porQty || 0), 0);
-                const pct = totalRev > 0 ? ((stRev / totalRev) * 100).toFixed(1) : '0.0';
-
-                return {
-                    name: st.name,
-                    color: st.color,
-                    count: matched.length,
-                    ankhi: stAnkhi,
-                    por: stPor,
-                    revenue: stRev,
-                    pct: pct
-                };
-            });
-
-            const storeContainer = document.getElementById('storeBreakdownContainer');
-            storeContainer.innerHTML = storeStats.map(st => `
-                <div class="border border-slate-100 rounded-lg p-2.5 bg-slate-50/60">
-                    <div class="flex items-center justify-between text-xs mb-1.5">
-                        <div class="flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full ${st.color}"></span>
-                            <span class="font-bold text-slate-800">${st.name}</span>
-                            <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-semibold">${st.count} bills</span>
-                        </div>
-                        <div class="font-extrabold text-slate-900">₹${st.revenue.toLocaleString('en-IN')} <span class="text-[11px] font-normal text-slate-500">(${st.pct}%)</span></div>
-                    </div>
-                    <!-- Progress Bar -->
-                    <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div class="${st.color} h-full transition-all duration-500" style="width: ${st.pct}%"></div>
-                    </div>
-                    <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1">
-                        <span>Ankhi: <strong>${st.ankhi.toFixed(3)} Ton</strong></span>
-                        <span>Por: <strong>${st.por.toLocaleString('en-IN')} Box</strong></span>
-                    </div>
-                </div>
-            `).join('');
-
-            // 3. Monthly Trends
-            const monthMap = {};
-            bills.forEach(b => {
-                const my = b.monthYear || 'Oct-2026';
-                if (!monthMap[my]) {
-                    monthMap[my] = { count: 0, revenue: 0, ankhi: 0, por: 0 };
-                }
-                monthMap[my].count += 1;
-                monthMap[my].revenue += (b.grandTotal || 0);
-                monthMap[my].ankhi += (b.ankhiQty || 0);
-                monthMap[my].por += (b.porQty || 0);
-            });
-
-            const monthContainer = document.getElementById('monthlyTrendsContainer');
-            monthContainer.innerHTML = Object.entries(monthMap).map(([my, data]) => `
-                <div class="border border-slate-200 rounded-lg p-3 bg-gradient-to-br from-slate-50 to-white">
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-xs font-bold text-slate-700">${my}</span>
-                        <span class="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded">${data.count} bills</span>
-                    </div>
-                    <div class="text-lg font-black text-slate-900">₹${data.revenue.toLocaleString('en-IN')}</div>
-                    <div class="text-[11px] text-slate-500 mt-1 flex justify-between">
-                        <span>Ankhi: ${data.ankhi.toFixed(2)} T</span>
-                        <span>Por: ${data.por.toLocaleString('en-IN')} B</span>
-                    </div>
-                </div>
-            `).join('');
-
-            renderHistoryTable(bills);
-        }
-
-        function renderHistoryTable(bills = null) {
-            if (!bills) bills = getStoredBills();
-            const tbody = document.getElementById('historyTableBody');
-            if (!bills.length) {
-                tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">No invoices logged yet. Create your first bill!</td></tr>`;
-                return;
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+                e.preventDefault();
+                downloadExcelBackup();
             }
+            if (e.key === 'Escape') closePreview();
+        });
 
-            tbody.innerHTML = bills.map(b => `
-                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
-                    <td class="py-2.5 px-3 font-bold text-slate-900">#${b.invNo}</td>
-                    <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">${b.date}</td>
-                    <td class="py-2.5 px-3">
-                        <div class="font-medium text-slate-800 line-clamp-1 max-w-[200px]" title="${b.store}">${b.store}</div>
-                        <div class="text-[10px] text-slate-400">${b.period}</div>
-                    </td>
-                    <td class="py-2.5 px-3 text-right font-medium text-amber-800">${b.ankhiQty ? b.ankhiQty.toFixed(3) : '0'}</td>
-                    <td class="py-2.5 px-3 text-right font-medium text-blue-800">${b.porQty ? b.porQty.toLocaleString('en-IN') : '0'}</td>
-                    <td class="py-2.5 px-3 text-right font-extrabold text-slate-900">₹${b.grandTotal ? b.grandTotal.toLocaleString('en-IN') : 0}</td>
-                    <td class="py-2.5 px-3 text-center">
-                        <div class="flex items-center justify-center gap-1.5">
-                            <button onclick="loadBillIntoForm(${b.invNo})" title="Load into form"
-                                class="p-1 hover:bg-amber-100 text-amber-700 rounded transition">
-                                ✏️
-                            </button>
-                            <button onclick="deleteBillRecord(${b.invNo})" title="Delete record"
-                                class="p-1 hover:bg-red-100 text-red-600 rounded transition">
-                                🗑️
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function filterHistoryTable() {
-            const query = (document.getElementById('historySearchInput').value || '').toLowerCase().trim();
-            const bills = getStoredBills();
-            if (!query) {
-                renderHistoryTable(bills);
-                return;
-            }
-            const filtered = bills.filter(b => 
-                String(b.invNo).includes(query) ||
-                (b.store && b.store.toLowerCase().includes(query)) ||
-                (b.date && b.date.toLowerCase().includes(query)) ||
-                (b.monthYear && b.monthYear.toLowerCase().includes(query))
-            );
-            renderHistoryTable(filtered);
-        }
-
-        function loadBillIntoForm(invNo) {
-            const bills = getStoredBills();
-            const b = bills.find(item => item.invNo === invNo);
-            if (!b) return;
-
-            document.getElementById('invNo').value = b.invNo;
-            // Parse date if in DD-MM-YYYY to YYYY-MM-DD
-            if (b.date && b.date.includes('-')) {
-                const parts = b.date.split('-');
-                if (parts[0].length === 4) {
-                    document.getElementById('invDate').value = b.date;
-                } else if (parts[2].length === 4) {
-                    document.getElementById('invDate').value = `${parts[2]}-${String(parts[1]).padStart(2,'0')}-${String(parts[0]).padStart(2,'0')}`;
-                }
-            }
-
-            const storeSel = document.getElementById('storeSelect');
-            let found = false;
-            for (let opt of storeSel.options) {
-                if (opt.value === b.store) {
-                    storeSel.value = b.store;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                storeSel.value = 'CUSTOM';
-                const customInput = document.getElementById('customStore');
-                customInput.classList.remove('hidden');
-                customInput.value = b.store;
-            } else {
-                document.getElementById('customStore').classList.add('hidden');
-            }
-
-            document.getElementById('billingPeriod').value = b.period || '';
-            document.getElementById('ankhiQty').value = b.ankhiQty || '';
-            document.getElementById('porQty').value = b.porQty || '';
-
-            syncInvoice();
-            toggleAnalyticsModal();
-            showToast(`Loaded Bill #${invNo}`, "Form fields populated with invoice data.", true);
-        }
-
-        function deleteBillRecord(invNo) {
-            if (!confirm(`Are you sure you want to delete Invoice #${invNo} from backup?`)) return;
-            let bills = getStoredBills();
-            bills = bills.filter(b => b.invNo !== invNo);
-            saveStoredBills(bills);
-            showToast("Bill Deleted", `Invoice #${invNo} removed from backup.`, false);
-        }
-
-        function clearAllRecords() {
-            if (!confirm("Are you sure you want to CLEAR ALL BILLING RECORDS? This cannot be undone.")) return;
-            localStorage.removeItem(STORAGE_KEY_BILLS);
-            updateAnalyticsUI();
-            showToast("Records Cleared", "All billing records removed from local storage.", false);
-        }
-
-        function restoreDefaultBaseline() {
-            if (!confirm("Restore default baseline (Invoices #47 & #48)?")) return;
-            saveStoredBills([...DEFAULT_BASELINE]);
-            showToast("Baseline Restored", "Invoices #47 & #48 restored.", true);
-        }
-
-        function exportJsonBackup() {
-            const bills = getStoredBills();
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(bills, null, 2));
-            const dlAnchorElem = document.createElement('a');
-            dlAnchorElem.setAttribute("href", dataStr);
-            dlAnchorElem.setAttribute("download", "dmart_billing_backup.json");
-            dlAnchorElem.click();
-        }
-
-        function importJsonBackup(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const parsed = JSON.parse(e.target.result);
-                    if (Array.isArray(parsed)) {
-                        saveStoredBills(parsed);
-                        showToast("Backup Imported", `Loaded ${parsed.length} invoices successfully!`, true);
-                    } else if (parsed.records && Array.isArray(parsed.records)) {
-                        saveStoredBills(parsed.records);
-                        showToast("Backup Imported", `Loaded ${parsed.records.length} invoices successfully!`, true);
-                    } else {
-                        alert("Invalid JSON format. Expected array of bill records.");
-                    }
-                } catch (err) {
-                    alert("Error parsing JSON: " + err.message);
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        // -------------------------------------------------------------
-        // UI TABS, MODALS & TOASTS
-        // -------------------------------------------------------------
-        function toggleAnalyticsModal() {
-            const modal = document.getElementById('analyticsModal');
-            if (modal.classList.contains('hidden')) {
-                updateAnalyticsUI();
-                modal.classList.remove('hidden');
-            } else {
-                modal.classList.add('hidden');
-            }
-        }
-
-        function switchTab(tabName) {
-            ['overview', 'history', 'tools'].forEach(t => {
-                const btn = document.getElementById(`tabBtn-${t}`);
-                const content = document.getElementById(`tabContent-${t}`);
-                if (t === tabName) {
-                    btn.className = 'py-3 px-1 border-b-2 border-amber-500 text-amber-700 flex items-center gap-1.5 font-bold';
-                    content.classList.remove('hidden');
-                } else {
-                    btn.className = 'py-3 px-1 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 font-medium';
-                    content.classList.add('hidden');
-                }
-            });
-        }
-
-        function togglePreviewModal() {
-            const modal = document.getElementById('previewModal');
-            const container = document.getElementById('modalPreviewContainer');
-            if (modal.classList.contains('hidden')) {
-                syncInvoice();
-                container.innerHTML = document.getElementById('print-area').innerHTML;
-                modal.classList.remove('hidden');
-            } else {
-                modal.classList.add('hidden');
-            }
-        }
-
-        let toastTimer = null;
-        function showToast(title, message, isSuccess = true) {
-            const toast = document.getElementById('toastNotification');
-            document.getElementById('toastTitle').textContent = title;
-            document.getElementById('toastMessage').textContent = message;
-
-            const icon = document.getElementById('toastIcon');
-            if (isSuccess) {
-                icon.className = "w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0";
-            } else {
-                icon.className = "w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0";
-            }
-
-            toast.classList.remove('translate-y-[-150%]', 'opacity-0', 'pointer-events-none');
-            toast.classList.add('translate-y-0', 'opacity-100');
-
-            if (toastTimer) clearTimeout(toastTimer);
-            toastTimer = setTimeout(hideToast, 4000);
-        }
-
-        function hideToast() {
-            const toast = document.getElementById('toastNotification');
-            toast.classList.remove('translate-y-0', 'opacity-100');
-            toast.classList.add('translate-y-[-150%]', 'opacity-0', 'pointer-events-none');
-        }
+        window.addEventListener('resize', () => {
+            if (!document.getElementById('previewModal').classList.contains('hidden')) fitPreview();
+        });
 
         // -------------------------------------------------------------
         // APP INITIALIZATION
         // -------------------------------------------------------------
+        // Enter on Ankhi jumps to Por; Enter on Por closes the keyboard
+        document.getElementById('ankhiQty').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('porQty').focus(); }
+        });
+        document.getElementById('porQty').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+        });
+
+        // Owner-only: press and hold the bill number for ~1 second to correct it
+        (function setupBillNoOverride() {
+            const badge = document.getElementById('invNoBadge');
+            let timer = null;
+            const cancel = () => { clearTimeout(timer); timer = null; };
+            badge.addEventListener('pointerdown', () => {
+                timer = setTimeout(() => {
+                    timer = null;
+                    const current = document.getElementById('invNo').value;
+                    const entered = prompt('Change bill number to:', current);
+                    if (entered === null) return;
+                    const n = parseInt(entered, 10);
+                    if (!n || n < 1) { showToast('Bill number not changed.', false); return; }
+                    localStorage.setItem(STORAGE_KEY_INV, String(n));
+                    setInvNo(n);
+                    syncInvoice();
+                    showToast(`Bill number set to ${n}`, true);
+                }, 900);
+            });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => badge.addEventListener(ev, cancel));
+            badge.addEventListener('contextmenu', e => e.preventDefault());
+        })();
+
+        // Keep the date current if the app is reopened on a later day
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) { refreshToday(); syncInvoice(); }
+        });
+
         window.addEventListener('DOMContentLoaded', () => {
-            // 1. Set today's date in YYYY-MM-DD
+            refreshToday();
+            setInvNo(nextBillNo());
+
+            // Default period: current month; 1–15 in the first half of the month, 16–end after that
             const now = new Date();
-            const yyyy = now.getFullYear();
-            const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const dd = String(now.getDate()).padStart(2, '0');
-            document.getElementById('invDate').value = `${yyyy}-${mm}-${dd}`;
+            periodYear = now.getFullYear();
+            periodMonth = now.getMonth() + 1;
+            periodHalf = now.getDate() <= 15 ? 'FIRST' : 'SECOND';
 
-            // 2. Load auto-incremented Invoice #
-            const savedInv = localStorage.getItem(STORAGE_KEY_INV);
-            document.getElementById('invNo').value = savedInv ? parseInt(savedInv, 10) : 48;
+            renderStoreChoices();
+            renderPeriod();
 
-            // 3. Default Billing Period based on day of month (1-15 vs 16-End)
-            if (now.getDate() <= 15) {
-                setPeriodPreset('FIRST');
-            } else {
-                setPeriodPreset('SECOND');
+            // Ask the browser not to clear saved bills when space runs low
+            if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+            // Offline support (only works when served over http/https)
+            if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+                navigator.serviceWorker.register('sw.js').catch(e => console.error('Service worker failed:', e));
             }
-
-            // 4. Auto Excel setting
-            const isAutoExcel = localStorage.getItem(STORAGE_KEY_AUTO_EXCEL) === '1';
-            document.getElementById('autoExcelDownloadCheck').checked = isAutoExcel;
-
-            // 5. Keep Ankhi DC and Por DC inputs blank
-            document.getElementById('ankhiQty').value = '';
-            document.getElementById('porQty').value = '';
-
-            // 6. Sync UI and calculate Analytics
-            syncInvoice();
-            updateAnalyticsUI();
         });
     </script>
 </body>
